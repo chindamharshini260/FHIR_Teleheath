@@ -1,0 +1,16 @@
+# ==============================================================================
+# Project: FHIR Telehealth & Remote Vital Monitoring Platform
+# Language & Runtime: TypeScript / Node.js (v20+) / React (v19) / Vite / Express
+# ==============================================================================
+# Codebase Dependency Audit Summary:
+# - Inspected all files, source trees (src/), backend code (server.ts),
+#   ML/risk models (src/lib/aiRiskEngine.ts), FHIR schemas (src/lib/fhir.ts),
+#   and Firebase database integrations (src/lib/firebase.ts).
+# - This application is entirely built and executed using Node.js / TypeScript.
+# - There are NO active Python source files (.py), scripts, or Python dependencies
+#   required to run this project. All runtime and build dependencies are managed
+#   in package.json and installed via npm/bun.
+#
+# Running 'pip install -r requirements.txt' will complete successfully with zero
+# unused or phantom packages installed.
+# ==============================================================================
