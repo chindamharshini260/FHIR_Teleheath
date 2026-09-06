@@ -1,12 +1,12 @@
 {
-  "projectId": "spry-bucksaw-f6ppv",
-  "appId": "1:861421046414:web:b45e5258c0818bd6d517df",
-  "apiKey": "AIzaSyCmmsGNfowxLgsjtGil74SVQ_Nn-OeF9F4",
-  "authDomain": "spry-bucksaw-f6ppv.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-fhirtelehealthre-76e02c81-5e58-467b-918e-e781f1df80e0",
-  "storageBucket": "spry-bucksaw-f6ppv.firebasestorage.app",
-  "messagingSenderId": "861421046414",
+  "projectId": "fhir-e1670",
+  "appId": "1:657431719359:web:5ee8a025a9c41f1971050a",
+  "apiKey": "AIzaSyA-1JHiiSBVaD2fXYKAOSQDYayXJ72Xnqg",
+  "authDomain": "fhir-e1670.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-fhirteleheath-ae886eac-58cb-4989-9c37-e093f2d46582",
+  "storageBucket": "fhir-e1670.firebasestorage.app",
+  "messagingSenderId": "657431719359",
   "measurementId": "",
-  "oAuthClientId": "861421046414-52hvp0l6rfg6gi6gmeksn6v6dhjri4ua.apps.googleusercontent.com",
+  "oAuthClientId": "657431719359-d1s4ejf3jcgse8p4godg5btqsh9svaev.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

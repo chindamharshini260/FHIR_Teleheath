@@ -26,6 +26,7 @@ export interface PatientProfile {
   id: string; // matches user id
   userId: string;
   fullName: string;
+  email?: string;
   dateOfBirth: string; // YYYY-MM-DD
   gender: 'male' | 'female' | 'other' | 'unknown';
   phoneNumber: string;
