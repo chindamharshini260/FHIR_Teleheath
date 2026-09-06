@@ -1,0 +1,280 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Authenticated platform user account with role metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "role": { "type": "string", "enum": ["patient", "doctor", "laboratory_staff", "administrator"], "description": "User system role" },
+        "fullName": { "type": "string", "description": "Full legal name" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "ISO timestamp of account creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "ISO timestamp of last update" }
+      },
+      "required": ["id", "email", "role", "fullName"]
+    },
+    "Patient": {
+      "title": "Patient",
+      "description": "Patient clinical demographic profile linked to FHIR Patient resource",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Patient identifier" },
+        "userId": { "type": "string", "description": "Associated Firebase Auth UID" },
+        "fullName": { "type": "string", "description": "Patient full name" },
+        "email": { "type": "string", "format": "email", "description": "Contact email" },
+        "dateOfBirth": { "type": "string", "description": "Date of birth (YYYY-MM-DD)" },
+        "gender": { "type": "string", "enum": ["male", "female", "other", "unknown"], "description": "Administrative gender" },
+        "phoneNumber": { "type": "string", "description": "Contact phone number" },
+        "address": { "type": "string", "description": "Residential address" },
+        "bloodGroup": { "type": "string", "description": "ABO and Rh blood group" },
+        "allergies": { "type": "array", "description": "Recorded allergies list" },
+        "conditions": { "type": "array", "description": "Diagnosed chronic conditions: Diabetes, Hypertension, COPD" },
+        "fhirId": { "type": "string", "description": "HL7 FHIR Patient resource ID" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Record creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Record update timestamp" }
+      },
+      "required": ["id", "userId", "fullName"]
+    },
+    "Practitioner": {
+      "title": "Practitioner",
+      "description": "Licensed healthcare provider profile linked to FHIR Practitioner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Practitioner identifier" },
+        "userId": { "type": "string", "description": "Associated Firebase Auth UID" },
+        "fullName": { "type": "string", "description": "Practitioner name" },
+        "email": { "type": "string", "format": "email", "description": "Practitioner email" },
+        "licenseNumber": { "type": "string", "description": "Medical board license identifier" },
+        "specialty": { "type": "string", "description": "Clinical specialty" },
+        "hospitalAffiliation": { "type": "string", "description": "Affiliated hospital or clinic" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Record timestamp" }
+      },
+      "required": ["id", "userId", "fullName"]
+    },
+    "Organization": {
+      "title": "Organization",
+      "description": "Healthcare provider or diagnostic laboratory organization",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Organization identifier" },
+        "name": { "type": "string", "description": "Organization name" },
+        "type": { "type": "string", "description": "Type of healthcare facility" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Record timestamp" }
+      },
+      "required": ["id", "name"]
+    },
+    "Condition": {
+      "title": "Condition",
+      "description": "Patient chronic diagnosis conforming to FHIR Condition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique condition record ID" },
+        "patientId": { "type": "string", "description": "Patient identifier" },
+        "condition": { "type": "string", "enum": ["Diabetes", "Hypertension", "COPD"], "description": "Diagnosed condition" },
+        "clinicalStatus": { "type": "string", "description": "active | resolved | remission" },
+        "verificationStatus": { "type": "string", "description": "confirmed | provisional" },
+        "recordedDate": { "type": "string", "format": "date-time", "description": "Date recorded" },
+        "fhirConditionId": { "type": "string", "description": "HL7 FHIR Condition resource ID" }
+      },
+      "required": ["id", "patientId", "condition"]
+    },
+    "Observation": {
+      "title": "Observation",
+      "description": "Vital sign or laboratory observation conforming to FHIR Observation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Observation record ID" },
+        "patientId": { "type": "string", "description": "Patient identifier" },
+        "parameterType": { "type": "string", "description": "Parameter code (e.g. blood_glucose, blood_pressure, spo2)" },
+        "value": { "type": "number", "description": "Numeric measurement value" },
+        "unit": { "type": "string", "description": "UCUM unit of measurement" },
+        "systolic": { "type": "number", "description": "Systolic blood pressure in mmHg" },
+        "diastolic": { "type": "number", "description": "Diastolic blood pressure in mmHg" },
+        "measurementContext": { "type": "string", "description": "fasting | post_meal | random" },
+        "date": { "type": "string", "description": "Date of reading (YYYY-MM-DD)" },
+        "time": { "type": "string", "description": "Time of reading (HH:mm)" },
+        "source": { "type": "string", "description": "Source of observation (Patient, Doctor, Device, Laboratory)" },
+        "notes": { "type": "string", "description": "Clinical or patient notes" },
+        "fhirObservationId": { "type": "string", "description": "HL7 FHIR Observation resource ID" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp" }
+      },
+      "required": ["id", "patientId", "parameterType", "date"]
+    },
+    "DiagnosticReport": {
+      "title": "DiagnosticReport",
+      "description": "Diagnostic laboratory test report conforming to FHIR DiagnosticReport",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Report identifier" },
+        "patientId": { "type": "string", "description": "Patient identifier" },
+        "testName": { "type": "string", "description": "Diagnostic test panel name" },
+        "category": { "type": "string", "description": "Biochemistry, Hematology, Microbiology, etc." },
+        "status": { "type": "string", "description": "preliminary | final | amended" },
+        "issuedDate": { "type": "string", "description": "Date issued" },
+        "performer": { "type": "string", "description": "Laboratory or pathologist name" },
+        "clinicalNotes": { "type": "string", "description": "Interpretive summary" },
+        "fhirReportId": { "type": "string", "description": "HL7 FHIR DiagnosticReport resource ID" }
+      },
+      "required": ["id", "patientId", "testName", "issuedDate"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Clinical appointment conforming to FHIR Appointment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Appointment identifier" },
+        "patientId": { "type": "string", "description": "Patient identifier" },
+        "doctorId": { "type": "string", "description": "Practitioner identifier" },
+        "doctorName": { "type": "string", "description": "Doctor full name" },
+        "patientName": { "type": "string", "description": "Patient full name" },
+        "date": { "type": "string", "description": "Appointment date (YYYY-MM-DD)" },
+        "time": { "type": "string", "description": "Appointment time (HH:mm)" },
+        "type": { "type": "string", "description": "Teleconsultation | In-person" },
+        "status": { "type": "string", "description": "scheduled | completed | cancelled" },
+        "reason": { "type": "string", "description": "Reason for visit" },
+        "meetLink": { "type": "string", "description": "Video consultation link" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Booking timestamp" }
+      },
+      "required": ["id", "patientId", "doctorId", "date", "time"]
+    },
+    "Encounter": {
+      "title": "Encounter",
+      "description": "Telehealth encounter conforming to FHIR Encounter",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Encounter identifier" },
+        "patientId": { "type": "string", "description": "Patient identifier" },
+        "doctorId": { "type": "string", "description": "Practitioner identifier" },
+        "appointmentId": { "type": "string", "description": "Associated appointment ID" },
+        "status": { "type": "string", "description": "in-progress | finished | cancelled" },
+        "startTime": { "type": "string", "format": "date-time", "description": "Session start timestamp" },
+        "endTime": { "type": "string", "format": "date-time", "description": "Session end timestamp" },
+        "clinicalNotes": { "type": "string", "description": "SOAP clinical notes" },
+        "diagnosis": { "type": "string", "description": "Encounter diagnosis" },
+        "fhirEncounterId": { "type": "string", "description": "HL7 FHIR Encounter resource ID" }
+      },
+      "required": ["id", "patientId", "doctorId", "status"]
+    },
+    "MedicationRequest": {
+      "title": "MedicationRequest",
+      "description": "Prescription conforming to FHIR MedicationRequest",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Prescription identifier" },
+        "patientId": { "type": "string", "description": "Patient identifier" },
+        "doctorId": { "type": "string", "description": "Prescribing practitioner identifier" },
+        "medicationName": { "type": "string", "description": "Brand or generic drug name" },
+        "dosage": { "type": "string", "description": "Dosage strength" },
+        "frequency": { "type": "string", "description": "Administration frequency" },
+        "duration": { "type": "string", "description": "Treatment duration" },
+        "instructions": { "type": "string", "description": "Patient instructions" },
+        "status": { "type": "string", "description": "active | completed | stopped" },
+        "authoredOn": { "type": "string", "description": "Date prescribed" },
+        "fhirMedicationRequestId": { "type": "string", "description": "HL7 FHIR MedicationRequest resource ID" }
+      },
+      "required": ["id", "patientId", "doctorId", "medicationName"]
+    },
+    "Consent": {
+      "title": "Consent",
+      "description": "Patient privacy and data sharing consent conforming to FHIR Consent",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Consent record identifier" },
+        "patientId": { "type": "string", "description": "Patient identifier" },
+        "scope": { "type": "string", "description": "Scope of data access" },
+        "status": { "type": "string", "description": "active | inactive | revoked" },
+        "provisionType": { "type": "string", "description": "permit | deny" },
+        "validUntil": { "type": "string", "description": "Expiration date" },
+        "fhirConsentId": { "type": "string", "description": "HL7 FHIR Consent resource ID" }
+      },
+      "required": ["id", "patientId", "status"]
+    },
+    "AIAssessment": {
+      "title": "AIAssessment",
+      "description": "Clinical guideline risk assessment (ADA, AHA, GOLD)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Assessment identifier" },
+        "patientId": { "type": "string", "description": "Patient identifier" },
+        "disease": { "type": "string", "description": "Evaluated condition" },
+        "riskScore": { "type": "number", "description": "Calculated risk percentage" },
+        "riskLevel": { "type": "string", "description": "Low | Moderate | High | Critical" },
+        "findings": { "type": "array", "description": "Clinical observation findings" },
+        "assessedAt": { "type": "string", "format": "date-time", "description": "Assessment timestamp" }
+      },
+      "required": ["id", "patientId", "disease", "riskLevel"]
+    },
+    "AuditEvent": {
+      "title": "AuditEvent",
+      "description": "Immutable security and access audit record conforming to FHIR AuditEvent",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Audit event identifier" },
+        "userId": { "type": "string", "description": "Actor user ID" },
+        "userRole": { "type": "string", "description": "Actor role" },
+        "userName": { "type": "string", "description": "Actor name" },
+        "action": { "type": "string", "description": "Operation action (LOGIN, CREATE, UPDATE, DELETE)" },
+        "resourceType": { "type": "string", "description": "Affected resource type" },
+        "resourceId": { "type": "string", "description": "Resource identifier" },
+        "description": { "type": "string", "description": "Audit narrative description" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Event timestamp" }
+      },
+      "required": ["id", "userId", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "#/entities/User",
+      "description": "User accounts with system role authorization metadata"
+    },
+    "/patients/{patientId}": {
+      "schema": "#/entities/Patient",
+      "description": "Patient clinical demographic profiles"
+    },
+    "/practitioners/{practitionerId}": {
+      "schema": "#/entities/Practitioner",
+      "description": "Healthcare provider clinical profiles"
+    },
+    "/organizations/{orgId}": {
+      "schema": "#/entities/Organization",
+      "description": "Clinical facilities and diagnostic laboratories"
+    },
+    "/conditions/{conditionId}": {
+      "schema": "#/entities/Condition",
+      "description": "Active diagnosed chronic conditions"
+    },
+    "/observations/{observationId}": {
+      "schema": "#/entities/Observation",
+      "description": "Longitudinal patient vital signs and clinical measurements"
+    },
+    "/diagnosticReports/{reportId}": {
+      "schema": "#/entities/DiagnosticReport",
+      "description": "Laboratory test reports and clinical pathology results"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "#/entities/Appointment",
+      "description": "Teleconsultation and clinical visit schedules"
+    },
+    "/encounters/{encounterId}": {
+      "schema": "#/entities/Encounter",
+      "description": "Clinical encounters and teleconsultation sessions"
+    },
+    "/medicationRequests/{requestId}": {
+      "schema": "#/entities/MedicationRequest",
+      "description": "Prescription orders and pharmacotherapy regimens"
+    },
+    "/consents/{consentId}": {
+      "schema": "#/entities/Consent",
+      "description": "Patient privacy consents and clinical data sharing directives"
+    },
+    "/aiAssessments/{assessmentId}": {
+      "schema": "#/entities/AIAssessment",
+      "description": "Automated guideline-based disease risk assessments"
+    },
+    "/auditEvents/{eventId}": {
+      "schema": "#/entities/AuditEvent",
+      "description": "HIPAA and FHIR compliant immutable clinical audit logs"
+    }
+  }
+}

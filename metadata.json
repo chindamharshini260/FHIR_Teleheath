@@ -1,0 +1,6 @@
+{
+  "name": "FHIR Telehealth & Remote Vital Monitoring",
+  "description": "FHIR R4-compliant telehealth platform with condition-based remote vital monitoring, longitudinal health history, and AI-assisted chronic disease risk stratification.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

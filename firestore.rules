@@ -1,0 +1,170 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isUserRole(role) {
+      return isAuthenticated() && (
+        (request.auth.token.role != null && request.auth.token.role == role) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == role)
+      );
+    }
+
+    function isDoctor() {
+      return isUserRole('doctor');
+    }
+
+    function isLabStaff() {
+      return isUserRole('laboratory_staff');
+    }
+
+    function isAdmin() {
+      return isUserRole('administrator');
+    }
+
+    // Users collection: user can manage their own account; staff can view profiles
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Patients collection: patient can read/update own record; doctors/admins can read/update
+    match /patients/{patientId} {
+      allow read: if isOwner(patientId) || isDoctor() || isLabStaff() || isAdmin();
+      allow create: if isOwner(patientId) || isAdmin();
+      allow update: if isOwner(patientId) || isDoctor() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Practitioners collection: clinical staff profiles
+    match /practitioners/{practitionerId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(practitionerId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Organizations collection: provider facilities and laboratories
+    match /organizations/{orgId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Conditions collection: patient diagnosed chronic conditions (Diabetes, Hypertension, COPD)
+    match /conditions/{conditionId} {
+      allow read: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        request.resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+      );
+      allow update: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid || isAdmin()
+      );
+    }
+
+    // Observations collection: health readings and clinical vitals
+    match /observations/{observationId} {
+      allow read: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid || isDoctor() || isLabStaff() || isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        request.resource.data.patientId == request.auth.uid || isDoctor() || isLabStaff() || isAdmin()
+      );
+      allow update: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Diagnostic Reports collection: lab test panels and pathology reports
+    match /diagnosticReports/{reportId} {
+      allow read: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid || isDoctor() || isLabStaff() || isAdmin()
+      );
+      allow create, update: if isLabStaff() || isDoctor() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Appointments collection: teleconsultation and clinic bookings
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        request.resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+      );
+      allow update: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Encounters collection: clinical encounters and consultations
+    match /encounters/{encounterId} {
+      allow read: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create, update: if isDoctor() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Medication Requests collection: prescriptions
+    match /medicationRequests/{requestId} {
+      allow read: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+      );
+      allow create, update: if isDoctor() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Consents collection: patient privacy & data sharing authorizations
+    match /consents/{consentId} {
+      allow read: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+      );
+      allow create, update: if isAuthenticated() && (
+        request.resource.data.patientId == request.auth.uid || isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // AI Assessments collection: automated clinical guideline evaluations
+    match /aiAssessments/{assessmentId} {
+      allow read: if isAuthenticated() && (
+        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Audit Events collection: immutable HIPAA / FHIR access audit records
+    match /auditEvents/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+  }
+}
