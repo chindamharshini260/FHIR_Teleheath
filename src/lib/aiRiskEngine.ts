@@ -101,7 +101,7 @@ export function evaluateDiabetesRisk(input: EvaluationInput): AIRiskAssessment {
   const glucoseVal = glucoseReading ? Number(glucoseReading.value) : undefined;
   const hba1cVal = hba1cReading ? Number(hba1cReading.value) : undefined;
   const weightKg = weightReading ? Number(weightReading.value) : undefined;
-  const hasHypertensionComorbidity = patient.conditions.includes('Hypertension');
+  const hasHypertensionComorbidity = Boolean(patient.conditions?.includes('Hypertension'));
 
   let riskScore = 0;
   let riskLevel: RiskLevel = 'LOW';
@@ -242,7 +242,7 @@ export function evaluateHypertensionRisk(input: EvaluationInput): AIRiskAssessme
   const diastolic = Number(bpReading!.diastolic);
   const hrReading = getLatestReading(readings, 'heart_rate');
   const hrVal = hrReading ? Number(hrReading.value) : undefined;
-  const hasDiabetes = patient.conditions.includes('Diabetes');
+  const hasDiabetes = Boolean(patient.conditions?.includes('Diabetes'));
 
   let riskLevel: RiskLevel = 'LOW';
   let probability = 0.12;

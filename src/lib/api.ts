@@ -703,7 +703,13 @@ export const api = {
       const snap = await getDocs(collection(db, 'patients'));
       const patients: PatientProfile[] = [];
       snap.forEach((d) => {
-        patients.push(d.data() as PatientProfile);
+        const data = d.data() as PatientProfile;
+        patients.push({
+          ...data,
+          conditions: Array.isArray(data.conditions) ? data.conditions : [],
+          allergies: Array.isArray(data.allergies) ? data.allergies : [],
+          currentMedications: Array.isArray(data.currentMedications) ? data.currentMedications : [],
+        });
       });
       return patients;
     } catch (err) {
@@ -841,12 +847,12 @@ export const api = {
   async getAppointments(filter: {
     patientId?: string;
     doctorId?: string;
-  }): Promise<Appointment[]> {
+  } = {}): Promise<Appointment[]> {
     try {
       let q = collection(db, 'appointments') as any;
-      if (filter.patientId) {
+      if (filter?.patientId) {
         q = query(q, where('patientId', '==', filter.patientId));
-      } else if (filter.doctorId) {
+      } else if (filter?.doctorId) {
         q = query(q, where('doctorId', '==', filter.doctorId));
       }
 

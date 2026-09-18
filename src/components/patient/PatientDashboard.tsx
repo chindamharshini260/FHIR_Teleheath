@@ -163,7 +163,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
 
   // Compute deterministic AI Risk Assessment from actual patient data
   const riskAssessments: AIRiskAssessment[] = useMemo(() => {
-    if (!profile || profile.conditions.length === 0) return [];
+    if (!profile || !profile.conditions || profile.conditions.length === 0) return [];
     return profile.conditions.map((cond) =>
       runAIRiskAssessment({
         patient: profile,
@@ -449,7 +449,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
                       Your monitoring is based on your selected conditions.
                     </p>
                   </div>
-                  {profile.conditions.length > 0 && (
+                  {(profile?.conditions?.length || 0) > 0 && (
                     <button
                       onClick={() => setActiveTab('conditions')}
                       className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 transition-colors"
@@ -459,7 +459,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
                   )}
                 </div>
 
-                {profile.conditions.length === 0 ? (
+                {(!profile?.conditions || profile.conditions.length === 0) ? (
                   <div className="py-6 px-4 bg-slate-50 border border-slate-200 rounded-lg text-center">
                     <HeartPulse className="w-7 h-7 text-slate-400 mx-auto mb-2" />
                     <p className="text-xs font-semibold text-slate-700">No medical conditions added yet.</p>
@@ -718,7 +718,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
                   <div className="py-6 text-center bg-slate-50 rounded-lg border border-slate-100">
                     <p className="text-xs font-semibold text-slate-700">AI risk assessment service is not configured.</p>
                   </div>
-                ) : profile.conditions.length === 0 ? (
+                ) : (!profile?.conditions || profile.conditions.length === 0) ? (
                   <div className="py-6 text-center bg-slate-50 rounded-lg border border-slate-100">
                     <p className="text-xs font-semibold text-slate-700">No medical conditions added yet.</p>
                     <p className="text-[11px] text-slate-500 mt-0.5">

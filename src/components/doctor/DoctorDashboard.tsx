@@ -117,7 +117,7 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ user }) => {
       if (ais.length > 0) {
         setCurrentAIAssessment(ais[0]);
       }
-      if (patient.conditions.length > 0) {
+      if (patient.conditions && patient.conditions.length > 0) {
         setAssessingCondition(patient.conditions[0]);
       }
     } catch (err) {
@@ -374,7 +374,7 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ user }) => {
                           {c}
                         </span>
                       ))}
-                      {p.conditions.length === 0 && (
+                      {(!p.conditions || p.conditions.length === 0) && (
                         <span className="text-[10px] text-slate-400 italic">No diagnosed conditions</span>
                       )}
                     </div>
@@ -395,7 +395,7 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ user }) => {
                   <div>
                     <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                       <span>{selectedPatient.fullName}</span>
-                      <span className="text-xs font-mono text-slate-400">({selectedPatient.userId.slice(0, 8)})</span>
+                      <span className="text-xs font-mono text-slate-400">({selectedPatient.userId?.slice(0, 8) || selectedPatient.id?.slice(0, 8)})</span>
                     </h2>
                     <p className="text-xs text-slate-500">
                       DOB: {selectedPatient.dateOfBirth || 'Unspecified'} • Phone: {selectedPatient.phoneNumber || 'Unspecified'} • Blood: {selectedPatient.bloodGroup || 'Unspecified'}
@@ -420,13 +420,13 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ user }) => {
                   <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
                     <span className="text-slate-500 block text-[11px]">Allergies</span>
                     <span className="font-semibold text-slate-900 mt-0.5 block">
-                      {selectedPatient.allergies.length > 0 ? selectedPatient.allergies.join(', ') : 'None documented'}
+                      {(selectedPatient.allergies?.length || 0) > 0 ? selectedPatient.allergies.join(', ') : 'None documented'}
                     </span>
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
                     <span className="text-slate-500 block text-[11px]">Current Medications</span>
                     <span className="font-semibold text-slate-900 mt-0.5 block">
-                      {selectedPatient.currentMedications.length > 0 ? selectedPatient.currentMedications.join(', ') : 'None documented'}
+                      {(selectedPatient.currentMedications?.length || 0) > 0 ? selectedPatient.currentMedications.join(', ') : 'None documented'}
                     </span>
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">

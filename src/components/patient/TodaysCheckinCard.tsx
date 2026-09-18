@@ -44,7 +44,7 @@ export const TodaysCheckinCard: React.FC<TodaysCheckinCardProps> = ({
 
   // Check if any readings were logged today
   const todaysReadings = useMemo(() => {
-    return readings.filter((r) => r.date === todayISO);
+    return (readings || []).filter((r) => r.date === todayISO);
   }, [readings, todayISO]);
 
   const hasCompletedToday = todaysReadings.length > 0;
@@ -307,7 +307,7 @@ export const TodaysCheckinCard: React.FC<TodaysCheckinCardProps> = ({
   // =========================================================================
   // CASE 1: IF NO CONDITION IS SELECTED
   // =========================================================================
-  if (conditions.length === 0) {
+  if (!conditions || conditions.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 mb-4">

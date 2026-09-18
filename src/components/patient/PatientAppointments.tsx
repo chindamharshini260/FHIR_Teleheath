@@ -32,9 +32,9 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({
           api.getAppointments({ patientId }),
           api.getDoctors(),
         ]);
-        setAppointments(appts);
+        setAppointments(appts || []);
         // Only allow booking with approved doctors
-        const approvedDocs = docs.filter((d) => d.doctorStatus === 'APPROVED' || !d.doctorStatus);
+        const approvedDocs = (docs || []).filter((d) => d.doctorStatus === 'APPROVED' || !d.doctorStatus);
         setDoctors(approvedDocs);
         if (approvedDocs.length > 0) {
           setSelectedDoctorId(approvedDocs[0].id);

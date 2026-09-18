@@ -187,12 +187,12 @@ export const LongitudinalHistory: React.FC<LongitudinalHistoryProps> = ({
           <div className="py-16 text-center bg-slate-50 rounded-xl border border-slate-200">
             <FolderOpen className="w-10 h-10 text-slate-400 mx-auto mb-2" />
             <h4 className="text-sm font-semibold text-slate-800">
-              {conditions.length === 0
+              {(!conditions || conditions.length === 0)
                 ? 'Please select your medical condition(s) before entering health readings.'
                 : 'No readings recorded yet.'}
             </h4>
             <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-              {conditions.length === 0
+              {(!conditions || conditions.length === 0)
                 ? 'Select your diagnosed condition in Medical Conditions to start monitoring.'
                 : 'Events will chronologically appear here as you log vital readings, receive diagnostic lab reports, and attend consultations.'}
             </p>

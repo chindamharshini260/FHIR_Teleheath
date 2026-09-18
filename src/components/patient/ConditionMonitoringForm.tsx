@@ -68,12 +68,13 @@ export const ConditionMonitoringForm: React.FC<ConditionMonitoringFormProps> = (
   } | null>(null);
 
   // Condition check
-  const hasDiabetes = conditions.includes('Diabetes');
-  const hasHypertension = conditions.includes('Hypertension');
-  const hasCOPD = conditions.includes('COPD');
+  const safeConditions = conditions || [];
+  const hasDiabetes = safeConditions.includes('Diabetes');
+  const hasHypertension = safeConditions.includes('Hypertension');
+  const hasCOPD = safeConditions.includes('COPD');
 
   // If patient has not selected any condition
-  if (conditions.length === 0) {
+  if (safeConditions.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center shadow-xs">
         <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-700 mx-auto flex items-center justify-center mb-3">

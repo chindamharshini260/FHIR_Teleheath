@@ -5,11 +5,19 @@ import { getStorage } from 'firebase/storage';
 import fallbackConfig from '../../firebase-applet-config.json';
 
 // Support both environment variables and firebase-applet-config.json
-export const firebaseConfig = {
-  apiKey:
+const resolveApiKey = (): string => {
+  const envKey =
     (typeof process !== 'undefined' && process.env?.FIREBASE_API_KEY) ||
-    (import.meta.env?.VITE_FIREBASE_API_KEY as string) ||
-    fallbackConfig.apiKey,
+    (import.meta.env?.VITE_FIREBASE_API_KEY as string);
+  // Google/Firebase Web API keys always start with AIza
+  if (typeof envKey === 'string' && envKey.trim().startsWith('AIza')) {
+    return envKey.trim();
+  }
+  return fallbackConfig.apiKey;
+};
+
+export const firebaseConfig = {
+  apiKey: resolveApiKey(),
   authDomain:
     (typeof process !== 'undefined' && process.env?.FIREBASE_AUTH_DOMAIN) ||
     (import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN as string) ||
