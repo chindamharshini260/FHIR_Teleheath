@@ -18,6 +18,7 @@ import {
   where,
   orderBy,
   limit,
+  onSnapshot,
 } from 'firebase/firestore';
 import {
   signInWithEmailAndPassword,
@@ -43,6 +44,7 @@ import {
   AIRiskAssessment,
   AuditEventRecord,
   DoctorStatus,
+  normalizeRole,
 } from '../types';
 
 /**
@@ -78,22 +80,30 @@ function buildUserDocument(params: {
   email: string;
   role: UserRole;
   fullName?: string;
+  name?: string;
   doctorStatus?: DoctorStatus;
   licenseNumber?: string;
   specialty?: string;
   hospitalAffiliation?: string;
   department?: string;
 }): UserAccount {
+  const resolvedName = (params.name || params.fullName || params.email.split('@')[0] || 'User').trim();
+  const nowIso = new Date().toISOString();
+  const effectiveRole = normalizeRole(params.role);
   const userDoc: Record<string, any> = {
     id: params.uid,
-    email: params.email,
-    role: params.role,
-    fullName: params.fullName || params.email.split('@')[0] || 'User',
-    createdAt: new Date().toISOString(),
+    uid: params.uid,
+    email: params.email.trim(),
+    role: effectiveRole,
+    name: resolvedName,
+    fullName: resolvedName,
+    createdAt: nowIso,
+    updatedAt: nowIso,
   };
 
-  if (params.role === 'doctor') {
+  if (effectiveRole === 'doctor') {
     // Doctors require an explicit doctorStatus ('PENDING' upon initial registration)
+    // IMPORTANT: doctorStatus must NEVER be undefined.
     userDoc.doctorStatus = params.doctorStatus || 'PENDING';
     if (params.licenseNumber && params.licenseNumber.trim() !== '') {
       userDoc.licenseNumber = params.licenseNumber.trim();
@@ -104,12 +114,12 @@ function buildUserDocument(params: {
     if (params.hospitalAffiliation && params.hospitalAffiliation.trim() !== '') {
       userDoc.hospitalAffiliation = params.hospitalAffiliation.trim();
     }
-  } else if (params.role === 'laboratory_staff') {
+  } else if (effectiveRole === 'lab') {
     if (params.department && params.department.trim() !== '') {
       userDoc.department = params.department.trim();
     }
   }
-  // For 'patient' and 'administrator': doctorStatus is completely omitted
+  // For 'patient' and 'admin': doctorStatus is completely omitted
 
   return sanitizeFirestoreData(userDoc as UserAccount);
 }
@@ -172,75 +182,95 @@ export const api = {
 
     const uid = firebaseUser.uid;
 
-    // Load or initialize user document in Firestore 'users' collection
+    // Fetch the user's Firestore document from the 'users' collection using UID
     const userDocRef = doc(db, 'users', uid);
     const userSnap = await getDoc(userDocRef);
     let userAccount: UserAccount;
 
     if (userSnap.exists()) {
-      userAccount = userSnap.data() as UserAccount;
-      // If role changed or was updated
-      if (userAccount.role !== credentials.role) {
-        userAccount.role = credentials.role;
-        const updatePayload: Record<string, any> = { role: credentials.role };
-        if (credentials.role === 'doctor' && !userAccount.doctorStatus) {
-          updatePayload.doctorStatus = 'PENDING';
-          userAccount.doctorStatus = 'PENDING';
-        }
-        await setDoc(userDocRef, sanitizeFirestoreData(updatePayload), { merge: true });
+      const data = userSnap.data();
+      let role = normalizeRole(data.role);
+      if (role !== 'admin' && role !== 'lab' && (data.doctorStatus || data.licenseNumber)) {
+        role = 'doctor';
       }
+      userAccount = {
+        ...data,
+        id: uid,
+        uid: uid,
+        role,
+      } as UserAccount;
     } else {
+      // First-time user creation if no document exists yet
+      const targetRole = credentials.role ? normalizeRole(credentials.role) : 'patient';
       userAccount = buildUserDocument({
         uid,
         email,
-        role: credentials.role,
+        role: targetRole,
         fullName: email.split('@')[0],
+        doctorStatus: targetRole === 'doctor' ? 'PENDING' : undefined,
       });
       await setDoc(userDocRef, sanitizeFirestoreData(userAccount));
+
+      // Role-specific profile initialization
+      if (targetRole === 'patient') {
+        const patDocRef = doc(db, 'patients', uid);
+        const patSnap = await getDoc(patDocRef);
+        if (!patSnap.exists()) {
+          const initialPatient: PatientProfile = {
+            id: uid,
+            userId: uid,
+            fullName: userAccount.fullName,
+            email: email,
+            dateOfBirth: '',
+            gender: 'unknown',
+            phoneNumber: '',
+            emergencyContact: { name: '', relationship: '', phone: '' },
+            bloodGroup: '',
+            allergies: [],
+            currentMedications: [],
+            conditions: [],
+            medicalHistoryNotes: '',
+            updatedAt: new Date().toISOString(),
+          };
+          await setDoc(patDocRef, sanitizeFirestoreData(initialPatient));
+        }
+        const consentDocRef = doc(db, 'consents', uid);
+        const consentSnap = await getDoc(consentDocRef);
+        if (!consentSnap.exists()) {
+          await setDoc(consentDocRef, sanitizeFirestoreData({
+            id: `consent-${uid}`,
+            patientId: uid,
+            status: 'active',
+            purpose: 'telehealth_consultation',
+            organization: 'Metro Health System',
+            scope: 'all_health_records',
+            grantedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            fhirConsentId: `Consent-${uid}`,
+          }));
+        }
+      } else if (targetRole === 'doctor') {
+        const docRef = doc(db, 'practitioners', uid);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+          const practitionerData = {
+            id: uid,
+            userId: uid,
+            fullName: userAccount.fullName,
+            email: email,
+            licenseNumber: userAccount.licenseNumber || 'MD-LIC-2026',
+            specialty: userAccount.specialty || 'General Telehealth',
+            hospitalAffiliation: userAccount.hospitalAffiliation || 'Metro Health System',
+            doctorStatus: userAccount.doctorStatus || 'PENDING',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          await setDoc(docRef, sanitizeFirestoreData(practitionerData));
+        }
+      }
     }
 
-    // Role-specific profile initialization
-    if (credentials.role === 'patient') {
-      const patDocRef = doc(db, 'patients', uid);
-      const patSnap = await getDoc(patDocRef);
-      if (!patSnap.exists()) {
-        const initialPatient: PatientProfile = {
-          id: uid,
-          userId: uid,
-          fullName: userAccount.fullName,
-          email: email,
-          dateOfBirth: '',
-          gender: 'unknown',
-          phoneNumber: '',
-          emergencyContact: { name: '', relationship: '', phone: '' },
-          bloodGroup: '',
-          allergies: [],
-          currentMedications: [],
-          conditions: [],
-          medicalHistoryNotes: '',
-          updatedAt: new Date().toISOString(),
-        };
-        await setDoc(patDocRef, sanitizeFirestoreData(initialPatient));
-      }
-    } else if (credentials.role === 'doctor') {
-      const docRef = doc(db, 'practitioners', uid);
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) {
-        const practitionerData = {
-          id: uid,
-          userId: uid,
-          fullName: userAccount.fullName,
-          email: email,
-          licenseNumber: userAccount.licenseNumber || 'MD-LIC-2026',
-          specialty: userAccount.specialty || 'General Telehealth',
-          hospitalAffiliation: userAccount.hospitalAffiliation || 'Metro Health System',
-          doctorStatus: userAccount.doctorStatus || 'PENDING',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        await setDoc(docRef, sanitizeFirestoreData(practitionerData));
-      }
-    }
+    const effectiveRole = normalizeRole(userAccount.role);
 
     // Record audit event in 'auditEvents' collection
     try {
@@ -248,12 +278,12 @@ export const api = {
       await setDoc(doc(db, 'auditEvents', auditId), sanitizeFirestoreData({
         id: auditId,
         userId: uid,
-        userRole: credentials.role,
+        userRole: userAccount.role,
         userEmail: email,
         action: 'LOGIN',
         resourceType: 'User',
         resourceId: uid,
-        description: `User ${email} signed in with role ${credentials.role}`,
+        description: `User ${email} signed in with role ${userAccount.role}`,
         timestamp: new Date().toISOString(),
       }));
     } catch (e) {
@@ -272,101 +302,107 @@ export const api = {
     const email = firebaseUser.email || '';
     const fullName = firebaseUser.displayName || email.split('@')[0] || 'User';
 
-    // Load or initialize user document in Firestore 'users' collection
+    // Fetch the user's Firestore document from the 'users' collection using UID
     const userDocRef = doc(db, 'users', uid);
     const userSnap = await getDoc(userDocRef);
     let userAccount: UserAccount;
 
     if (userSnap.exists()) {
-      userAccount = userSnap.data() as UserAccount;
-      if (userAccount.role !== role) {
-        userAccount.role = role;
-        const updatePayload: Record<string, any> = { role };
-        if (role === 'doctor' && !userAccount.doctorStatus) {
-          updatePayload.doctorStatus = 'PENDING';
-          userAccount.doctorStatus = 'PENDING';
-        }
-        await setDoc(userDocRef, sanitizeFirestoreData(updatePayload), { merge: true });
+      const data = userSnap.data();
+      let detectedRole = normalizeRole(data.role);
+      if (detectedRole !== 'admin' && detectedRole !== 'lab' && (data.doctorStatus || data.licenseNumber)) {
+        detectedRole = 'doctor';
       }
+      userAccount = {
+        ...data,
+        id: uid,
+        uid: uid,
+        role: detectedRole,
+      } as UserAccount;
     } else {
+      // First-time user creation
+      const targetRole = role ? normalizeRole(role) : 'patient';
       userAccount = buildUserDocument({
         uid,
         email,
-        role,
+        role: targetRole,
         fullName,
+        doctorStatus: targetRole === 'doctor' ? 'PENDING' : undefined,
       });
       await setDoc(userDocRef, sanitizeFirestoreData(userAccount));
+
+      // Role-specific profile initialization
+      if (targetRole === 'patient') {
+        const patDocRef = doc(db, 'patients', uid);
+        const patSnap = await getDoc(patDocRef);
+        if (!patSnap.exists()) {
+          const initialPatient: PatientProfile = {
+            id: uid,
+            userId: uid,
+            fullName: userAccount.fullName,
+            email: email,
+            dateOfBirth: '',
+            gender: 'unknown',
+            phoneNumber: firebaseUser.phoneNumber || '',
+            emergencyContact: { name: '', relationship: '', phone: '' },
+            bloodGroup: '',
+            allergies: [],
+            currentMedications: [],
+            conditions: [],
+            medicalHistoryNotes: '',
+            updatedAt: new Date().toISOString(),
+          };
+          await setDoc(patDocRef, sanitizeFirestoreData(initialPatient));
+        }
+        const consentDocRef = doc(db, 'consents', uid);
+        const consentSnap = await getDoc(consentDocRef);
+        if (!consentSnap.exists()) {
+          await setDoc(consentDocRef, sanitizeFirestoreData({
+            id: `consent-${uid}`,
+            patientId: uid,
+            status: 'active',
+            purpose: 'telehealth_consultation',
+            organization: 'Metro Health System',
+            scope: 'all_health_records',
+            grantedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            fhirConsentId: `Consent-${uid}`,
+          }));
+        }
+      } else if (targetRole === 'doctor') {
+        const docRef = doc(db, 'practitioners', uid);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+          const practitionerData = {
+            id: uid,
+            userId: uid,
+            fullName: userAccount.fullName,
+            email: email,
+            licenseNumber: 'MD-LIC-2026',
+            specialty: 'General Telehealth',
+            hospitalAffiliation: 'Metro Health System',
+            doctorStatus: 'PENDING',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          await setDoc(docRef, sanitizeFirestoreData(practitionerData));
+        }
+      }
     }
 
-    // Role-specific profile initialization
-    if (role === 'patient') {
-      const patDocRef = doc(db, 'patients', uid);
-      const patSnap = await getDoc(patDocRef);
-      if (!patSnap.exists()) {
-        const initialPatient: PatientProfile = {
-          id: uid,
-          userId: uid,
-          fullName: userAccount.fullName,
-          email: email,
-          dateOfBirth: '',
-          gender: 'unknown',
-          phoneNumber: firebaseUser.phoneNumber || '',
-          emergencyContact: { name: '', relationship: '', phone: '' },
-          bloodGroup: '',
-          allergies: [],
-          currentMedications: [],
-          conditions: [],
-          medicalHistoryNotes: '',
-          updatedAt: new Date().toISOString(),
-        };
-        await setDoc(patDocRef, sanitizeFirestoreData(initialPatient));
-      }
-      const consentDocRef = doc(db, 'consents', uid);
-      const consentSnap = await getDoc(consentDocRef);
-      if (!consentSnap.exists()) {
-        await setDoc(consentDocRef, sanitizeFirestoreData({
-          id: `consent-${uid}`,
-          patientId: uid,
-          status: 'active',
-          purpose: 'telehealth_consultation',
-          organization: 'Metro Health System',
-          scope: 'all_health_records',
-          grantedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-          fhirConsentId: `Consent-${uid}`,
-        }));
-      }
-    } else if (role === 'doctor') {
-      const docRef = doc(db, 'practitioners', uid);
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) {
-        const practitionerData = {
-          id: uid,
-          userId: uid,
-          fullName: userAccount.fullName,
-          email: email,
-          licenseNumber: 'MD-LIC-2026',
-          specialty: 'General Telehealth',
-          hospitalAffiliation: 'Metro Health System',
-          doctorStatus: userAccount.doctorStatus || 'PENDING',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        await setDoc(docRef, sanitizeFirestoreData(practitionerData));
-      }
-    }
+    const effectiveRole = normalizeRole(userAccount.role);
 
     try {
       const auditId = `audit-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
       await setDoc(doc(db, 'auditEvents', auditId), sanitizeFirestoreData({
         id: auditId,
         userId: uid,
-        userRole: role,
+        userRole: userAccount.role,
         userEmail: email,
         action: 'LOGIN',
         resourceType: 'User',
         resourceId: uid,
-        description: `User ${email} signed in with Google (${role})`,
+        description: `User ${email} signed in with Google (${userAccount.role})`,
         timestamp: new Date().toISOString(),
       }));
     } catch (e) {
@@ -402,15 +438,11 @@ export const api = {
     } catch (err: any) {
       if (err.code === 'auth/operation-not-allowed') {
         throw new Error(
-          `[${err.code}]: ${err.message || 'Email/Password sign-in is disabled in your Firebase project (fhir-e1670).'}`
+          `[${err.code}]: ${err.message || 'Email/Password sign-in is disabled in your Firebase project.'}`
         );
       }
       if (err.code === 'auth/email-already-in-use') {
-        try {
-          userCred = await signInWithEmailAndPassword(auth, email, password);
-        } catch (signInErr: any) {
-          throw new Error('An account with this email already exists. Please switch to the Login tab.');
-        }
+        throw new Error('This email is already registered. Please switch to the Login tab.');
       } else if (err.code === 'auth/weak-password') {
         throw new Error('Password must be at least 6 characters long.');
       } else {
@@ -419,18 +451,19 @@ export const api = {
     }
 
     const uid = userCred.user.uid;
+    const effectiveRole = normalizeRole(userData.role);
 
     // Build role-aware user document:
-    // - Patient: NO doctorStatus field included
-    // - Doctor: doctorStatus explicitly set to 'PENDING'
-    // - Lab Staff: includes department if provided, no doctorStatus
-    // - Administrator: no doctorStatus
+    // - Patient: role: "patient" (NO doctorStatus)
+    // - Doctor: role: "doctor", doctorStatus: "PENDING"
+    // - Lab Staff: role: "lab" (NO doctorStatus)
+    // - Administrator: role: "admin" (NO doctorStatus)
     const newUser = buildUserDocument({
       uid,
       email,
-      role: userData.role,
+      role: effectiveRole,
       fullName: userData.fullName,
-      doctorStatus: userData.role === 'doctor' ? 'PENDING' : undefined,
+      doctorStatus: effectiveRole === 'doctor' ? 'PENDING' : undefined,
       licenseNumber: userData.licenseNumber,
       specialty: userData.specialty,
       hospitalAffiliation: userData.hospitalAffiliation,
@@ -439,7 +472,7 @@ export const api = {
 
     await setDoc(doc(db, 'users', uid), sanitizeFirestoreData(newUser));
 
-    if (userData.role === 'patient') {
+    if (effectiveRole === 'patient') {
       const newPatient: PatientProfile = {
         id: uid,
         userId: uid,
@@ -470,7 +503,7 @@ export const api = {
         expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
         fhirConsentId: `Consent-${uid}`,
       }));
-    } else if (userData.role === 'doctor') {
+    } else if (effectiveRole === 'doctor') {
       const practitionerData = {
         id: uid,
         userId: uid,
@@ -1044,10 +1077,37 @@ export const api = {
       if (snap.exists()) {
         return snap.data() as PatientConsent;
       }
-      return null;
+      // If no consent record exists yet for this patient, create and return default active consent
+      const defaultConsent: PatientConsent = {
+        id: `consent-${uid}`,
+        patientId: uid,
+        status: 'active',
+        purpose: 'telehealth_consultation',
+        organization: 'Metro Health System',
+        scope: 'all_health_records',
+        grantedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        fhirConsentId: `Consent-${uid}`,
+      };
+      try {
+        await setDoc(doc(db, 'consents', uid), sanitizeFirestoreData(defaultConsent));
+      } catch (saveErr) {
+        console.warn('Could not auto-initialize consent document:', saveErr);
+      }
+      return defaultConsent;
     } catch (err) {
-      console.error('Error fetching consent:', err);
-      return null;
+      console.warn('Consent fetch notice, returning active default consent:', err);
+      return {
+        id: `consent-${uid}`,
+        patientId: uid,
+        status: 'active',
+        purpose: 'telehealth_consultation',
+        organization: 'Metro Health System',
+        scope: 'all_health_records',
+        grantedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        fhirConsentId: `Consent-${uid}`,
+      };
     }
   },
 
@@ -1065,7 +1125,20 @@ export const api = {
     });
     await setDoc(doc(db, 'consents', uid), payload, { merge: true });
     const snap = await getDoc(doc(db, 'consents', uid));
-    return snap.data() as PatientConsent;
+    if (snap.exists()) {
+      return snap.data() as PatientConsent;
+    }
+    return {
+      id: `consent-${uid}`,
+      patientId: uid,
+      status: consent.status || 'active',
+      purpose: consent.purpose || 'telehealth_consultation',
+      organization: consent.organization || 'Metro Health System',
+      scope: consent.scope || 'all_health_records',
+      grantedAt: new Date().toISOString(),
+      expiresAt: consent.expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      fhirConsentId: consent.fhirConsentId || `Consent-${uid}`,
+    };
   },
 
   // -------------------------------------------------------------
@@ -1104,8 +1177,18 @@ export const api = {
       const snap = await getDocs(collection(db, 'users'));
       const users: UserAccount[] = [];
       snap.forEach((d) => {
-        users.push(d.data() as UserAccount);
+        const data = d.data();
+        const resolvedName = data.name || data.fullName || 'User';
+        users.push({
+          id: d.id,
+          uid: d.id,
+          ...data,
+          fullName: resolvedName,
+          name: resolvedName,
+          doctorStatus: data.role === 'doctor' ? (data.doctorStatus || 'PENDING') : undefined,
+        } as UserAccount);
       });
+      users.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       return users;
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -1119,8 +1202,18 @@ export const api = {
       const snap = await getDocs(q);
       const doctors: UserAccount[] = [];
       snap.forEach((d) => {
-        doctors.push(d.data() as UserAccount);
+        const data = d.data();
+        const resolvedName = data.name || data.fullName || 'Doctor';
+        doctors.push({
+          id: d.id,
+          uid: d.id,
+          ...data,
+          fullName: resolvedName,
+          name: resolvedName,
+          doctorStatus: data.doctorStatus || 'PENDING',
+        } as UserAccount);
       });
+      doctors.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       return doctors;
     } catch (err) {
       console.error('Error fetching doctors:', err);
@@ -1128,20 +1221,104 @@ export const api = {
     }
   },
 
+  /**
+   * Real-time listener for registered doctors.
+   * Immediately notifies callback when a new doctor registers, gets approved, or gets rejected.
+   */
+  subscribeToDoctors(
+    callback: (doctors: UserAccount[]) => void,
+    onError?: (err: any) => void
+  ): () => void {
+    const q = query(collection(db, 'users'), where('role', '==', 'doctor'));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const doctors: UserAccount[] = [];
+        snap.forEach((d) => {
+          const data = d.data();
+          const resolvedName = data.name || data.fullName || 'Doctor';
+          doctors.push({
+            id: d.id,
+            uid: d.id,
+            ...data,
+            fullName: resolvedName,
+            name: resolvedName,
+            doctorStatus: data.doctorStatus || 'PENDING',
+          } as UserAccount);
+        });
+        doctors.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        callback(doctors);
+      },
+      (err) => {
+        console.error('Error in subscribeToDoctors listener:', err);
+        if (onError) onError(err);
+      }
+    );
+  },
+
+  /**
+   * Real-time listener for all healthcare accounts.
+   */
+  subscribeToAllUsers(
+    callback: (users: UserAccount[]) => void,
+    onError?: (err: any) => void
+  ): () => void {
+    return onSnapshot(
+      collection(db, 'users'),
+      (snap) => {
+        const users: UserAccount[] = [];
+        snap.forEach((d) => {
+          const data = d.data();
+          const resolvedName = data.name || data.fullName || 'User';
+          users.push({
+            id: d.id,
+            uid: d.id,
+            ...data,
+            fullName: resolvedName,
+            name: resolvedName,
+            doctorStatus: data.role === 'doctor' ? (data.doctorStatus || 'PENDING') : undefined,
+          } as UserAccount);
+        });
+        users.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        callback(users);
+      },
+      (err) => {
+        console.error('Error in subscribeToAllUsers listener:', err);
+        if (onError) onError(err);
+      }
+    );
+  },
+
   async verifyDoctor(
     doctorId: string,
     status: 'APPROVED' | 'REJECTED',
     adminId?: string
   ): Promise<{ success: boolean; user: UserAccount }> {
-    await updateDoc(doc(db, 'users', doctorId), sanitizeFirestoreData({ doctorStatus: status }));
+    const nowIso = new Date().toISOString();
+    await updateDoc(doc(db, 'users', doctorId), sanitizeFirestoreData({
+      doctorStatus: status,
+      updatedAt: nowIso,
+    }));
     try {
-      await updateDoc(doc(db, 'practitioners', doctorId), sanitizeFirestoreData({ doctorStatus: status }));
+      await updateDoc(doc(db, 'practitioners', doctorId), sanitizeFirestoreData({
+        doctorStatus: status,
+        updatedAt: nowIso,
+      }));
     } catch (e) {
       // ignore if not present
     }
 
     const snap = await getDoc(doc(db, 'users', doctorId));
-    const updatedUser = snap.data() as UserAccount;
+    const data = snap.data() || {};
+    const resolvedName = data.name || data.fullName || 'Doctor';
+    const updatedUser: UserAccount = {
+      id: snap.id,
+      uid: snap.id,
+      ...data,
+      fullName: resolvedName,
+      name: resolvedName,
+      doctorStatus: status,
+    } as UserAccount;
 
     try {
       const auditId = `audit-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
@@ -1153,8 +1330,8 @@ export const api = {
         action: 'VERIFY_DOCTOR',
         resourceType: 'Practitioner',
         resourceId: doctorId,
-        description: `Doctor status updated to ${status} for ${updatedUser.fullName}`,
-        timestamp: new Date().toISOString(),
+        description: `Doctor verification status updated to ${status} for ${updatedUser.fullName}`,
+        timestamp: nowIso,
       }));
     } catch (e) {
       console.warn('Audit note:', e);

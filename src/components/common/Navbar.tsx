@@ -1,6 +1,6 @@
 import React from 'react';
 import { Activity, LogOut, ShieldCheck, UserCheck, Stethoscope, FlaskConical } from 'lucide-react';
-import { UserAccount } from '../../types';
+import { UserAccount, normalizeRole } from '../../types';
 
 interface NavbarProps {
   currentUser: UserAccount | null;
@@ -10,7 +10,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onSwitchRole }) => {
   const getRoleBadge = (role: string, doctorStatus?: string) => {
-    switch (role) {
+    switch (normalizeRole(role)) {
       case 'patient':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -23,13 +23,13 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onSwitchR
             <Stethoscope className="w-3.5 h-3.5" /> Doctor {doctorStatus ? `(${doctorStatus})` : ''}
           </span>
         );
-      case 'laboratory_staff':
+      case 'lab':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
             <FlaskConical className="w-3.5 h-3.5" /> Laboratory Staff
           </span>
         );
-      case 'administrator':
+      case 'admin':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
             <ShieldCheck className="w-3.5 h-3.5" /> Administrator

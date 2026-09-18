@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserRole, UserAccount } from '../../types';
+import { UserRole, UserAccount, normalizeRole } from '../../types';
 import { api } from '../../lib/api';
 import { ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
 
@@ -28,6 +28,8 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ role, onBackToRoles, onL
   const [licenseNumber, setLicenseNumber] = useState('');
   const [specialty, setSpecialty] = useState('');
   const [hospitalAffiliation, setHospitalAffiliation] = useState('');
+  // Lab fields
+  const [department, setDepartment] = useState('');
   // Admin passkey
   const [adminPasskey, setAdminPasskey] = useState('admin_telehealth_secure_key_2026');
 
@@ -36,15 +38,17 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ role, onBackToRoles, onL
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
+  const effectiveRole = normalizeRole(role);
+
   const getRoleTitle = () => {
-    switch (role) {
+    switch (effectiveRole) {
       case 'patient':
         return 'Patient';
       case 'doctor':
         return 'Doctor';
-      case 'laboratory_staff':
+      case 'lab':
         return 'Laboratory Staff';
-      case 'administrator':
+      case 'admin':
         return 'Administrator';
     }
   };
@@ -56,7 +60,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ role, onBackToRoles, onL
     setLoading(true);
 
     try {
-      const res = await api.login({ email, password, role });
+      const res = await api.login({ email, password, role: effectiveRole });
       onLoginSuccess(res.user);
     } catch (err: any) {
       setErrorMessage(err.message || 'Authentication error.');
@@ -72,21 +76,24 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ role, onBackToRoles, onL
     setLoading(true);
 
     try {
-      if (role === 'administrator') {
-        throw new Error('Public Administrator registration is strictly prohibited.');
+      if (effectiveRole === 'admin') {
+        if (adminPasskey !== 'admin_telehealth_secure_key_2026') {
+          throw new Error('Invalid Administrator Passkey. Authorization denied.');
+        }
       }
 
       const res = await api.register({
         email,
         password,
-        role,
+        role: effectiveRole,
         fullName,
         dateOfBirth: dob,
         gender,
         phoneNumber,
-        licenseNumber: role === 'doctor' ? licenseNumber : undefined,
-        specialty: role === 'doctor' ? specialty : undefined,
-        hospitalAffiliation: role === 'doctor' ? hospitalAffiliation : undefined,
+        licenseNumber: effectiveRole === 'doctor' ? licenseNumber : undefined,
+        specialty: effectiveRole === 'doctor' ? specialty : undefined,
+        hospitalAffiliation: effectiveRole === 'doctor' ? hospitalAffiliation : undefined,
+        department: effectiveRole === 'lab' ? department : undefined,
       });
 
       onLoginSuccess(res.user);
@@ -103,7 +110,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ role, onBackToRoles, onL
     setLoading(true);
 
     try {
-      const res = await api.loginWithGoogle(role);
+      const res = await api.loginWithGoogle(effectiveRole);
       onLoginSuccess(res.user);
     } catch (err: any) {
       setErrorMessage(err.message || 'Google sign-in failed.');
@@ -279,7 +286,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ role, onBackToRoles, onL
             </button>
 
             {/* Register if applicable */}
-            {(role === 'patient' || role === 'doctor') && (
+            {(effectiveRole === 'patient' || effectiveRole === 'doctor' || effectiveRole === 'lab' || effectiveRole === 'admin') && (
               <div className="text-center pt-2 border-t border-slate-100">
                 <p className="text-xs text-slate-600">
                   Don't have an account?{' '}
@@ -311,7 +318,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ role, onBackToRoles, onL
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder={role === 'doctor' ? 'Dr. Jane Smith' : 'John Doe'}
+                placeholder={effectiveRole === 'doctor' ? 'Dr. Jane Smith' : 'John Doe'}
                 className="w-full px-3.5 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-teal-600 focus:outline-none"
               />
             </div>
@@ -345,7 +352,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ role, onBackToRoles, onL
             </div>
 
             {/* Patient Specific Fields */}
-            {role === 'patient' && (
+            {effectiveRole === 'patient' && (
               <>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -394,7 +401,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ role, onBackToRoles, onL
             )}
 
             {/* Doctor Specific Fields */}
-            {role === 'doctor' && (
+            {effectiveRole === 'doctor' && (
               <>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -439,6 +446,41 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ role, onBackToRoles, onL
                   </div>
                 </div>
               </>
+            )}
+
+            {/* Laboratory Staff Specific Fields */}
+            {effectiveRole === 'lab' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Department / Specialty
+                </label>
+                <input
+                  type="text"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  placeholder="e.g. Pathology & Diagnostics"
+                  className="w-full px-3.5 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                />
+              </div>
+            )}
+
+            {/* Administrator Specific Field */}
+            {effectiveRole === 'admin' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Administrative Passkey
+                </label>
+                <input
+                  type="password"
+                  value={adminPasskey}
+                  onChange={(e) => setAdminPasskey(e.target.value)}
+                  placeholder="Enter administrator passkey"
+                  className="w-full px-3.5 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Governance security verification key required for hospital administrator accounts.
+                </p>
+              </div>
             )}
 
             <button

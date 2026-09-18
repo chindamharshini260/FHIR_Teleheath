@@ -43,6 +43,7 @@ interface DoctorDashboardProps {
 export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ user }) => {
   // If doctor status is PENDING, show clinical hold screen
   const isPending = user.doctorStatus === 'PENDING';
+  const isRejected = user.doctorStatus === 'REJECTED';
 
   const [patients, setPatients] = useState<PatientProfile[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<PatientProfile | null>(null);
@@ -207,6 +208,28 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ user }) => {
           <p className="text-xs text-slate-400">
             Once approved by the Administrator via the Governance Portal, clinical dashboards will become immediately accessible.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // If status is REJECTED, render the rejected screen
+  if (isRejected) {
+    return (
+      <div className="max-w-2xl mx-auto py-16 px-4 text-center">
+        <div className="bg-white rounded-2xl border border-rose-200 p-8 shadow-sm">
+          <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4 border border-rose-200">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">Access Restricted: Account REJECTED</h2>
+          <p className="text-sm text-slate-600 leading-relaxed max-w-md mx-auto mb-6">
+            Your practitioner registration could not be verified or approved by hospital administration.
+          </p>
+          <div className="p-4 bg-slate-50 rounded-xl text-xs text-slate-600 text-left space-y-1 mb-4 border border-slate-200">
+            <p><strong>Practitioner:</strong> {user.fullName}</p>
+            <p><strong>Email:</strong> {user.email}</p>
+            <p><strong>Status:</strong> REJECTED</p>
+          </div>
         </div>
       </div>
     );

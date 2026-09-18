@@ -21,13 +21,13 @@ export const RoleSelection: React.FC<RoleSelectionProps> = ({ onSelectRole }) =>
       icon: Stethoscope,
     },
     {
-      id: 'laboratory_staff' as UserRole,
+      id: 'lab' as UserRole,
       title: 'Laboratory Staff',
       description: 'Manage reports',
       icon: FlaskConical,
     },
     {
-      id: 'administrator' as UserRole,
+      id: 'admin' as UserRole,
       title: 'Administrator',
       description: 'Manage the platform',
       icon: ShieldCheck,

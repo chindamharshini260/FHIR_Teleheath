@@ -27,18 +27,33 @@ service cloud.firestore {
     }
 
     function isLabStaff() {
-      return isUserRole('laboratory_staff');
+      return isUserRole('laboratory_staff') || isUserRole('lab');
     }
 
     function isAdmin() {
-      return isUserRole('administrator');
+      return isAuthenticated() && (
+        isUserRole('administrator') ||
+        isUserRole('admin') ||
+        (request.auth.token.email != null && (
+          request.auth.token.email == 'admin@hospital.org' ||
+          request.auth.token.email == 'chindamharshini260@gmail.com' ||
+          request.auth.token.email == 'chindamharshiniphotos260@gmail.com'
+        ))
+      );
     }
 
     // Users collection: user can manage their own account; staff can view profiles
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && (
+        request.resource.data.role != 'doctor' ||
+        request.resource.data.doctorStatus == 'PENDING'
+      );
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        (!('doctorStatus' in request.resource.data) || request.resource.data.doctorStatus == resource.data.doctorStatus) &&
+        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)
+      );
       allow delete: if isAdmin();
     }
 
@@ -66,29 +81,29 @@ service cloud.firestore {
     // Conditions collection: patient diagnosed chronic conditions (Diabetes, Hypertension, COPD)
     match /conditions/{conditionId} {
       allow read: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+        (resource != null && resource.data.patientId == request.auth.uid) || isDoctor() || isAdmin()
       );
       allow create: if isAuthenticated() && (
         request.resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
       );
       allow update: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+        (resource != null && resource.data.patientId == request.auth.uid) || isDoctor() || isAdmin()
       );
       allow delete: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid || isAdmin()
+        (resource != null && resource.data.patientId == request.auth.uid) || isAdmin()
       );
     }
 
     // Observations collection: health readings and clinical vitals
     match /observations/{observationId} {
       allow read: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid || isDoctor() || isLabStaff() || isAdmin()
+        (resource != null && resource.data.patientId == request.auth.uid) || isDoctor() || isLabStaff() || isAdmin()
       );
       allow create: if isAuthenticated() && (
         request.resource.data.patientId == request.auth.uid || isDoctor() || isLabStaff() || isAdmin()
       );
       allow update: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+        (resource != null && resource.data.patientId == request.auth.uid) || isDoctor() || isAdmin()
       );
       allow delete: if isAdmin();
     }
@@ -96,7 +111,7 @@ service cloud.firestore {
     // Diagnostic Reports collection: lab test panels and pathology reports
     match /diagnosticReports/{reportId} {
       allow read: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid || isDoctor() || isLabStaff() || isAdmin()
+        (resource != null && resource.data.patientId == request.auth.uid) || isDoctor() || isLabStaff() || isAdmin()
       );
       allow create, update: if isLabStaff() || isDoctor() || isAdmin();
       allow delete: if isAdmin();
@@ -105,16 +120,14 @@ service cloud.firestore {
     // Appointments collection: teleconsultation and clinic bookings
     match /appointments/{appointmentId} {
       allow read: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid ||
-        resource.data.doctorId == request.auth.uid ||
+        (resource != null && (resource.data.patientId == request.auth.uid || resource.data.doctorId == request.auth.uid)) ||
         isAdmin()
       );
       allow create: if isAuthenticated() && (
         request.resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
       );
       allow update: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid ||
-        resource.data.doctorId == request.auth.uid ||
+        (resource != null && (resource.data.patientId == request.auth.uid || resource.data.doctorId == request.auth.uid)) ||
         isAdmin()
       );
       allow delete: if isAdmin();
@@ -123,8 +136,7 @@ service cloud.firestore {
     // Encounters collection: clinical encounters and consultations
     match /encounters/{encounterId} {
       allow read: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid ||
-        resource.data.doctorId == request.auth.uid ||
+        (resource != null && (resource.data.patientId == request.auth.uid || resource.data.doctorId == request.auth.uid)) ||
         isAdmin()
       );
       allow create, update: if isDoctor() || isAdmin();
@@ -134,7 +146,7 @@ service cloud.firestore {
     // Medication Requests collection: prescriptions
     match /medicationRequests/{requestId} {
       allow read: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+        (resource != null && resource.data.patientId == request.auth.uid) || isDoctor() || isAdmin()
       );
       allow create, update: if isDoctor() || isAdmin();
       allow delete: if isAdmin();
@@ -143,10 +155,15 @@ service cloud.firestore {
     // Consents collection: patient privacy & data sharing authorizations
     match /consents/{consentId} {
       allow read: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+        isOwner(consentId) ||
+        isDoctor() ||
+        isAdmin() ||
+        (resource != null && resource.data.patientId == request.auth.uid)
       );
       allow create, update: if isAuthenticated() && (
-        request.resource.data.patientId == request.auth.uid || isAdmin()
+        isOwner(consentId) ||
+        request.resource.data.patientId == request.auth.uid ||
+        isAdmin()
       );
       allow delete: if isAdmin();
     }
@@ -154,7 +171,7 @@ service cloud.firestore {
     // AI Assessments collection: automated clinical guideline evaluations
     match /aiAssessments/{assessmentId} {
       allow read: if isAuthenticated() && (
-        resource.data.patientId == request.auth.uid || isDoctor() || isAdmin()
+        (resource != null && resource.data.patientId == request.auth.uid) || isDoctor() || isAdmin()
       );
       allow create: if isAuthenticated();
       allow update, delete: if isAdmin();

@@ -3,17 +3,38 @@
  * Adheres strictly to FHIR R4 standard structures and platform roles.
  */
 
-export type UserRole = 'patient' | 'doctor' | 'laboratory_staff' | 'administrator';
+export type UserRole =
+  | 'patient'
+  | 'doctor'
+  | 'laboratory_staff'
+  | 'administrator'
+  | 'lab'
+  | 'admin';
+
+export function normalizeRole(
+  role?: string | null
+): 'patient' | 'doctor' | 'lab' | 'admin' {
+  if (!role) return 'patient';
+  const r = role.toLowerCase().trim();
+  if (r === 'admin' || r === 'administrator') return 'admin';
+  if (r === 'lab' || r === 'laboratory_staff') return 'lab';
+  if (r === 'doctor') return 'doctor';
+  if (r === 'patient') return 'patient';
+  return 'patient';
+}
 
 export type DoctorStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface UserAccount {
   id: string;
+  uid?: string;
   email: string;
   role: UserRole;
   fullName: string;
+  name?: string;
   createdAt: string;
-  doctorStatus?: DoctorStatus; // Applicable to doctors
+  updatedAt?: string;
+  doctorStatus?: DoctorStatus; // Applicable to doctors: 'PENDING' | 'APPROVED' | 'REJECTED'
   licenseNumber?: string;
   specialty?: string;
   hospitalAffiliation?: string;

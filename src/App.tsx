@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, UserAccount } from './types';
+import { UserRole, UserAccount, normalizeRole } from './types';
 import { Navbar } from './components/common/Navbar';
 import { RoleSelection } from './components/auth/RoleSelection';
 import { AuthPortal } from './components/auth/AuthPortal';
@@ -24,16 +24,30 @@ export default function App() {
         try {
           const userSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
           if (userSnap.exists()) {
-            const user = userSnap.data() as UserAccount;
+            const raw = userSnap.data();
+            let role = normalizeRole(raw.role);
+            if (role !== 'admin' && role !== 'lab' && (raw.doctorStatus || raw.licenseNumber)) {
+              role = 'doctor';
+            }
+            const user = {
+              ...raw,
+              id: firebaseUser.uid,
+              uid: firebaseUser.uid,
+              role,
+            } as UserAccount;
+
             setCurrentUser(user);
-            setSelectedRole(user.role);
+            setSelectedRole(role);
+          } else {
+            // User doc may still be in flight during registration
+            setCurrentUser(null);
           }
         } catch (e) {
           console.warn('Could not restore Firestore user session:', e);
+          setCurrentUser(null);
         }
       } else {
         setCurrentUser(null);
-        setSelectedRole(null);
       }
       setAuthLoading(false);
     });
@@ -50,8 +64,10 @@ export default function App() {
   };
 
   const handleLoginSuccess = (user: UserAccount) => {
-    setCurrentUser(user);
-    setSelectedRole(user.role);
+    const role = normalizeRole(user.role);
+    const normalizedUser = { ...user, role };
+    setCurrentUser(normalizedUser);
+    setSelectedRole(role);
   };
 
   const handleLogout = async () => {
@@ -75,10 +91,13 @@ export default function App() {
     );
   }
 
+  const currentRole = currentUser ? normalizeRole(currentUser.role) : null;
+  const isPatient = currentRole === 'patient';
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans antialiased selection:bg-teal-100 selection:text-teal-900">
       {/* Top Universal Navbar - Suppressed for Patient role as Patient uses dedicated Left Sidebar */}
-      {currentUser?.role !== 'patient' && (
+      {currentUser && !isPatient && (
         <Navbar
           currentUser={currentUser}
           onLogout={handleLogout}
@@ -102,18 +121,18 @@ export default function App() {
         ) : (
           /* Role-Protected Real Dashboards */
           <>
-            {currentUser.role === 'patient' && (
+            {currentRole === 'patient' && (
               <PatientDashboard user={currentUser} onLogout={handleLogout} />
             )}
-            {currentUser.role === 'doctor' && <DoctorDashboard user={currentUser} />}
-            {currentUser.role === 'laboratory_staff' && <LabDashboard user={currentUser} />}
-            {currentUser.role === 'administrator' && <AdminDashboard user={currentUser} />}
+            {currentRole === 'doctor' && <DoctorDashboard user={currentUser} />}
+            {currentRole === 'lab' && <LabDashboard user={currentUser} />}
+            {currentRole === 'admin' && <AdminDashboard user={currentUser} />}
           </>
         )}
       </main>
 
       {/* System Footer - Hidden for patient sidebar layout */}
-      {currentUser?.role !== 'patient' && (
+      {currentUser && !isPatient && (
         <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
             <span>
