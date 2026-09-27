@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { Prescription, LaboratoryReport } from '../../types';
-import { Pill, FlaskConical, Calendar, FileCode, CheckCircle2 } from 'lucide-react';
-import { buildFHIRMedicationRequest, buildFHIRDiagnosticReport } from '../../lib/fhir';
-import { FHIRInspectorModal } from '../common/FHIRInspectorModal';
+import { Pill, FlaskConical, Calendar, FileText, X, Download } from 'lucide-react';
 
 interface PatientPrescriptionsAndLabsProps {
   prescriptions: Prescription[];
@@ -15,159 +13,182 @@ export const PatientPrescriptionsAndLabs: React.FC<PatientPrescriptionsAndLabsPr
   labReports,
   initialTab = 'prescriptions',
 }) => {
-  const [activeTab, setActiveTab] = useState<'prescriptions' | 'labs'>(initialTab);
+  const [selectedReport, setSelectedReport] = useState<LaboratoryReport | null>(null);
 
-  React.useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab);
-    }
-  }, [initialTab]);
-  const [inspectorData, setInspectorData] = useState<{ title: string; resourceName: string; json: object } | null>(null);
+  // If viewed specifically as Laboratory Reports
+  if (initialTab === 'labs') {
+    return (
+      <div className="max-w-3xl space-y-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
+          <div className="pb-5 border-b border-slate-100">
+            <h2 className="text-xl font-bold text-slate-900">Laboratory Reports</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              View your test results and reports.
+            </p>
+          </div>
 
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-      {/* Tabs */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-6">
-        <div className="flex gap-4">
-          <button
-            onClick={() => setActiveTab('prescriptions')}
-            className={`flex items-center gap-2 pb-2 text-sm font-bold border-b-2 transition-colors ${
-              activeTab === 'prescriptions'
-                ? 'border-teal-600 text-teal-800'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Pill className="w-4 h-4" />
-            <span>Prescriptions ({prescriptions.length})</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('labs')}
-            className={`flex items-center gap-2 pb-2 text-sm font-bold border-b-2 transition-colors ${
-              activeTab === 'labs'
-                ? 'border-teal-600 text-teal-800'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <FlaskConical className="w-4 h-4" />
-            <span>Laboratory Reports ({labReports.length})</span>
-          </button>
+          <div className="pt-5">
+            {labReports.length === 0 ? (
+              <div className="py-12 text-center bg-slate-50 rounded-xl border border-slate-100">
+                <FlaskConical className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                <h3 className="text-sm font-bold text-slate-800">No laboratory reports yet.</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Reports from your laboratory will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {labReports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">{report.testName}</h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Date: <span className="text-slate-700 font-medium">{report.testDate}</span> • Laboratory:{' '}
+                        <span className="text-slate-700 font-medium">{report.laboratoryName}</span>
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedReport(report)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors self-start sm:self-center"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>View Report</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <span className="text-xs font-mono text-slate-400 hidden sm:inline">FHIR Interoperable Record</span>
-      </div>
 
-      {/* Prescriptions Tab */}
-      {activeTab === 'prescriptions' && (
-        <div>
+        {/* Simple Report Details Modal */}
+        {selectedReport && (
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl border border-slate-200 max-w-lg w-full p-6 shadow-xl space-y-4">
+              <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">{selectedReport.testName}</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {selectedReport.testDate} • {selectedReport.laboratoryName}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedReport(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="p-3 bg-slate-50 rounded-xl space-y-1.5">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Result:</span>
+                    <strong className="text-slate-900 font-semibold">
+                      {selectedReport.resultValue} {selectedReport.unit}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Reference Range:</span>
+                    <span className="text-slate-700">{selectedReport.referenceRange}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Interpretation:</span>
+                    <span
+                      className={`font-semibold ${
+                        selectedReport.interpretation === 'Normal'
+                          ? 'text-emerald-700'
+                          : 'text-amber-700'
+                      }`}
+                    >
+                      {selectedReport.interpretation}
+                    </span>
+                  </div>
+                </div>
+
+                {selectedReport.notes && (
+                  <div className="p-3 bg-slate-50 rounded-xl">
+                    <span className="font-semibold text-slate-700 block mb-1">Notes:</span>
+                    <p className="text-slate-600 leading-relaxed">{selectedReport.notes}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  onClick={() => setSelectedReport(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Otherwise, default to Prescriptions view
+  return (
+    <div className="max-w-3xl space-y-6">
+      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
+        <div className="pb-5 border-b border-slate-100">
+          <h2 className="text-xl font-bold text-slate-900">Prescriptions</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            View medicines prescribed by your doctor.
+          </p>
+        </div>
+
+        <div className="pt-5">
           {prescriptions.length === 0 ? (
-            <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
-              <Pill className="w-10 h-10 text-slate-400 mx-auto mb-2" />
-              <h4 className="text-sm font-semibold text-slate-700">No active prescriptions</h4>
-              <p className="text-xs text-slate-500 mt-1">Prescriptions authorized by your physician will appear here.</p>
+            <div className="py-12 text-center bg-slate-50 rounded-xl border border-slate-100">
+              <Pill className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+              <h3 className="text-sm font-bold text-slate-800">No prescriptions yet.</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Medicines prescribed by your doctor will appear here.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {prescriptions.map((rx) => (
-                <div key={rx.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 hover:border-slate-300 transition-colors">
-                  <div className="flex items-start justify-between mb-2">
+                <div
+                  key={rx.id}
+                  className="p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors shadow-2xs space-y-2.5"
+                >
+                  <div className="flex items-start justify-between">
                     <div>
                       <h4 className="text-sm font-bold text-slate-900">{rx.medication}</h4>
-                      <p className="text-xs text-teal-700 font-semibold">{rx.dosage} • {rx.frequency}</p>
+                      <p className="text-xs text-slate-600 mt-1">
+                        <strong>Dosage:</strong> {rx.dosage}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        <strong>How often to take it:</strong> {rx.frequency}
+                      </p>
                     </div>
-                    <button
-                      onClick={() =>
-                        setInspectorData({
-                          title: `FHIR MedicationRequest: ${rx.medication}`,
-                          resourceName: 'MedicationRequest',
-                          json: buildFHIRMedicationRequest(rx),
-                        })
-                      }
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-teal-700 hover:bg-teal-50 transition-colors"
-                      title="Inspect FHIR MedicationRequest JSON"
-                    >
-                      <FileCode className="w-4 h-4" />
-                    </button>
                   </div>
 
-                  <p className="text-xs text-slate-600 mb-3">
-                    Duration: <strong className="text-slate-800">{rx.duration}</strong>. Instructions: {rx.instructions}
+                  <p className="text-xs text-slate-600">
+                    <strong>Duration:</strong> {rx.duration}
+                    {rx.instructions ? ` • ${rx.instructions}` : ''}
                   </p>
 
-                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>Prescribed by: <strong className="text-slate-700">Dr. {rx.doctorName}</strong></span>
-                    <span>{rx.prescribedDate}</span>
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>
+                      Doctor: <strong className="text-slate-700">Dr. {rx.doctorName}</strong>
+                    </span>
+                    <span>Date: {rx.prescribedDate}</span>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-      )}
-
-      {/* Lab Reports Tab */}
-      {activeTab === 'labs' && (
-        <div>
-          {labReports.length === 0 ? (
-            <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
-              <FlaskConical className="w-10 h-10 text-slate-400 mx-auto mb-2" />
-              <h4 className="text-sm font-semibold text-slate-700">No laboratory reports filed</h4>
-              <p className="text-xs text-slate-500 mt-1">Diagnostic pathology and laboratory results will appear here once submitted by laboratory staff.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {labReports.map((rep) => (
-                <div key={rep.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-bold text-slate-900">{rep.testName}</span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
-                          rep.interpretation === 'Normal'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : rep.interpretation === 'Critical'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {rep.interpretation}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-700">
-                      Result: <strong className="text-slate-900">{rep.resultValue} {rep.unit}</strong> • Reference Range: {rep.referenceRange}
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Laboratory: {rep.laboratoryName} • Date: {rep.testDate}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() =>
-                      setInspectorData({
-                        title: `FHIR DiagnosticReport: ${rep.testName}`,
-                        resourceName: 'DiagnosticReport',
-                        json: buildFHIRDiagnosticReport(rep),
-                      })
-                    }
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors self-start sm:self-auto"
-                  >
-                    <FileCode className="w-3.5 h-3.5 text-teal-700" />
-                    <span>View FHIR Report</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* FHIR Modal Inspector */}
-      {inspectorData && (
-        <FHIRInspectorModal
-          title={inspectorData.title}
-          resourceName={inspectorData.resourceName}
-          fhirJson={inspectorData.json}
-          onClose={() => setInspectorData(null)}
-        />
-      )}
+      </div>
     </div>
   );
 };

@@ -12,7 +12,6 @@ import {
   AIRiskAssessment,
 } from '../../types';
 import { api } from '../../lib/api';
-import { buildFHIRPatient, buildFHIRObservation } from '../../lib/fhir';
 import { runAIRiskAssessment } from '../../lib/aiRiskEngine';
 import {
   Activity,
@@ -21,7 +20,6 @@ import {
   Pill,
   ShieldCheck,
   TrendingUp,
-  FileCode,
   User,
   PlusCircle,
   Video,
@@ -38,8 +36,7 @@ import {
   ArrowRight,
   CheckCircle2,
   AlertCircle,
-  AlertTriangle,
-  FolderOpen,
+  Sparkles,
 } from 'lucide-react';
 import { PatientProfileManager } from './PatientProfileManager';
 import { MedicalConditionsView } from './MedicalConditionsView';
@@ -52,8 +49,6 @@ import { PatientConsentView } from './PatientConsentView';
 import { PatientSettingsView } from './PatientSettingsView';
 import { PatientHelpSupportView } from './PatientHelpSupportView';
 import { VideoConsultationRoom } from '../common/VideoConsultationRoom';
-import { FHIRInspectorModal } from '../common/FHIRInspectorModal';
-import { TodaysCheckinCard } from './TodaysCheckinCard';
 
 export type PatientNavTab =
   | 'dashboard'
@@ -62,6 +57,7 @@ export type PatientNavTab =
   | 'monitoring'
   | 'history'
   | 'trends'
+  | 'ai_risk'
   | 'lab_reports'
   | 'appointments'
   | 'consultations'
@@ -89,11 +85,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
 
   const [loading, setLoading] = useState(true);
   const [activeVideoAppt, setActiveVideoAppt] = useState<Appointment | null>(null);
-  const [inspectorData, setInspectorData] = useState<{
-    title: string;
-    resourceName: string;
-    json: object;
-  } | null>(null);
 
   useEffect(() => {
     async function fetchPatientData() {
@@ -122,11 +113,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
         ]);
 
         setProfile(prof);
-        setReadings(rds);
-        setAppointments(appts);
-        setPrescriptions(rxs);
-        setLabReports(labs);
-        setConsent(cons);
+        setReadings(rds || []);
+        setAppointments(appts || []);
+        setPrescriptions(rxs || []);
+        setLabReports(labs || []);
+        setConsent(cons || null);
       } catch (err) {
         console.error('Failed to load patient dataset:', err);
       } finally {
@@ -140,18 +131,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
     setReadings((prev) => [newReading, ...prev]);
   };
 
-  const handleBatchReadingsAdded = (newOrUpdated: HealthReading[]) => {
-    setReadings((prev) => {
-      const map = new Map<string, HealthReading>(prev.map((r) => [r.id, r]));
-      newOrUpdated.forEach((r) => map.set(r.id, r));
-      return Array.from(map.values()).sort(
-        (a: HealthReading, b: HealthReading) =>
-          new Date(`${b.date}T${b.time || '00:00'}`).getTime() -
-          new Date(`${a.date}T${a.time || '00:00'}`).getTime()
-      );
-    });
-  };
-
   const handleConditionsUpdated = (newConditions: SupportedCondition[]) => {
     if (profile) {
       setProfile({
@@ -161,7 +140,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
     }
   };
 
-  // Compute deterministic AI Risk Assessment from actual patient data
+  // Deterministic AI Risk Assessments for selected conditions
   const riskAssessments: AIRiskAssessment[] = useMemo(() => {
     if (!profile || !profile.conditions || profile.conditions.length === 0) return [];
     return profile.conditions.map((cond) =>
@@ -173,22 +152,66 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
     );
   }, [profile, readings]);
 
-  // Primary navigation items in exact specified order
+  // Next upcoming appointment
+  const nextAppointment = useMemo(() => {
+    const upcoming = appointments
+      .filter((a) => a.status === 'Booked' || a.status === 'Proposed')
+      .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+    return upcoming[0] || null;
+  }, [appointments]);
+
+  // Latest Health Reading Summary
+  const latestReadingSummary = useMemo(() => {
+    if (readings.length === 0) return null;
+    const sorted = [...readings].sort(
+      (a, b) =>
+        new Date(`${b.date}T${b.time || '00:00'}`).getTime() -
+        new Date(`${a.date}T${a.time || '00:00'}`).getTime()
+    );
+
+    const bp = sorted.find((r) => r.parameterType === 'blood_pressure');
+    const hr = sorted.find((r) => r.parameterType === 'heart_rate');
+    const bg = sorted.find((r) => r.parameterType === 'blood_glucose');
+    const spo2 = sorted.find((r) => r.parameterType === 'spo2');
+
+    const lines: string[] = [];
+    if (bp && bp.systolic && bp.diastolic) {
+      lines.push(`Blood Pressure: ${bp.systolic}/${bp.diastolic}`);
+    }
+    if (hr && hr.value) {
+      lines.push(`Heart Rate: ${hr.value} bpm`);
+    }
+    if (bg && bg.value && lines.length < 2) {
+      lines.push(`Blood Glucose: ${bg.value} mg/dL`);
+    }
+    if (spo2 && spo2.value && lines.length < 2) {
+      lines.push(`SpO2: ${spo2.value}%`);
+    }
+
+    if (lines.length === 0) {
+      const top = sorted[0];
+      lines.push(`${top.parameterType.replace('_', ' ')}: ${top.value ?? ''} ${top.unit}`);
+    }
+
+    return lines;
+  }, [readings]);
+
+  // Navigation Items
   const primaryNavItems: { id: PatientNavTab; label: string; icon: React.ElementType }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'profile', label: 'Profile', icon: User },
-    { id: 'conditions', label: 'Medical Conditions', icon: HeartPulse },
+    { id: 'profile', label: 'My Profile', icon: User },
+    { id: 'conditions', label: 'My Health Conditions', icon: HeartPulse },
     { id: 'monitoring', label: 'Health Monitoring', icon: Activity },
     { id: 'history', label: 'Health History', icon: History },
     { id: 'trends', label: 'Health Trends', icon: TrendingUp },
+    { id: 'ai_risk', label: 'Health Risk Assessment', icon: Sparkles },
     { id: 'lab_reports', label: 'Laboratory Reports', icon: FlaskConical },
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'consultations', label: 'Consultations', icon: Video },
     { id: 'prescriptions', label: 'Prescriptions', icon: Pill },
-    { id: 'consent', label: 'Consent Management', icon: ShieldCheck },
+    { id: 'consent', label: 'Privacy & Consent', icon: ShieldCheck },
   ];
 
-  // Secondary navigation items
   const secondaryNavItems: { id: PatientNavTab; label: string; icon: React.ElementType }[] = [
     { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'help', label: 'Help & Support', icon: HelpCircle },
@@ -199,32 +222,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
           <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-xs font-semibold text-slate-600">Loading Clinical Portal...</p>
+          <p className="text-xs font-semibold text-slate-600">Loading Portal...</p>
         </div>
       </div>
     );
   }
-
-  const formatParamName = (type: string) => {
-    switch (type) {
-      case 'blood_pressure':
-        return 'Blood Pressure';
-      case 'blood_glucose':
-        return 'Blood Glucose';
-      case 'spo2':
-        return 'SpO2';
-      case 'heart_rate':
-        return 'Heart Rate';
-      case 'respiratory_rate':
-        return 'Respiratory Rate';
-      case 'weight':
-        return 'Weight';
-      case 'hba1c':
-        return 'HbA1c';
-      default:
-        return type.replace('_', ' ');
-    }
-  };
 
   const patientDisplayName = profile.fullName || user.fullName;
 
@@ -258,13 +260,13 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
         />
       )}
 
-      {/* PERMANENT LEFT SIDEBAR (Desktop ~256px / Mobile Drawer) */}
+      {/* PERMANENT LEFT SIDEBAR */}
       <aside
         className={`fixed md:sticky top-0 left-0 z-50 md:z-20 h-screen w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-200 ease-in-out shrink-0 ${
           sidebarOpen ? 'translate-x-0 shadow-xl md:shadow-none' : '-translate-x-full md:translate-x-0'
         }`}
       >
-        {/* 3. SIDEBAR HEADER: Compact Branding */}
+        {/* Sidebar Header */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-teal-700 text-white flex items-center justify-center shrink-0">
@@ -283,9 +285,8 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
           </button>
         </div>
 
-        {/* 2. SIDEBAR NAVIGATION */}
+        {/* Sidebar Navigation */}
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-          {/* Primary Patient Functions */}
           {primaryNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -308,12 +309,10 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
             );
           })}
 
-          {/* Divider */}
           <div className="pt-2 pb-1">
             <hr className="border-slate-100" />
           </div>
 
-          {/* Secondary Functions */}
           {secondaryNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -337,7 +336,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
           })}
         </div>
 
-        {/* 4. PATIENT INFORMATION & LOGOUT AT BOTTOM */}
+        {/* Patient Profile & Logout */}
         <div className="p-3.5 border-t border-slate-200 bg-slate-50/60 shrink-0">
           <div className="flex items-center gap-2.5 mb-3 px-1">
             <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-xs shrink-0 border border-teal-200">
@@ -345,7 +344,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-bold text-slate-900 truncate">{patientDisplayName}</p>
-              <p className="text-[10px] text-teal-700 font-semibold truncate">Role: Patient</p>
+              <p className="text-[10px] text-teal-700 font-semibold truncate">Patient</p>
             </div>
           </div>
 
@@ -361,9 +360,9 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        {/* 5. MAIN HEADER */}
+        {/* Main Header */}
         <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-10">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-slate-900 tracking-tight">
                 Welcome back, {patientDisplayName}
@@ -374,7 +373,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Notification Icon */}
               <button
                 onClick={() => setActiveTab('appointments')}
                 className="relative p-2 rounded-lg text-slate-500 hover:text-teal-700 hover:bg-slate-100 transition-colors"
@@ -387,7 +385,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
                 )}
               </button>
 
-              {/* Patient Badge */}
               <div className="flex items-center gap-2.5 pl-3 border-l border-slate-200">
                 <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-xs shrink-0 border border-teal-200">
                   {patientDisplayName.charAt(0).toUpperCase()}
@@ -404,8 +401,8 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
         </header>
 
         {/* Content Body */}
-        <div className="p-6 max-w-6xl w-full mx-auto space-y-6 flex-1">
-          {/* Active Video Call Modal / Screen if ongoing */}
+        <div className="p-6 max-w-5xl w-full mx-auto space-y-6 flex-1">
+          {/* Active Video Call Screen if ongoing */}
           {activeVideoAppt && (
             <div className="mb-6">
               <VideoConsultationRoom
@@ -420,467 +417,173 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
           )}
 
           {/* ========================================================
-              VIEW: DASHBOARD
+              VIEW: DASHBOARD (Clean, 4 Cards, Quick Actions)
              ======================================================== */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              {/* 1. TODAY'S CHECK-IN */}
-              <TodaysCheckinCard
-                patientId={user.id}
-                conditions={profile.conditions}
-                readings={readings}
-                onReadingsAdded={handleBatchReadingsAdded}
-                onNavigateToConditions={() => setActiveTab('conditions')}
-                onInspectFHIR={(r) =>
-                  setInspectorData({
-                    title: `FHIR Observation: ${r.parameterType}`,
-                    resourceName: 'Observation',
-                    json: buildFHIRObservation(r),
-                  })
-                }
-              />
-
-              {/* 2. MEDICAL CONDITIONS CARD */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 mb-4">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">Medical Conditions</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Your monitoring is based on your selected conditions.
-                    </p>
+              {/* 4 Simple Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 1. My Condition */}
+                <div
+                  onClick={() => setActiveTab('conditions')}
+                  className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs hover:border-teal-500 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between"
+                >
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      My Condition
+                    </span>
+                    <HeartPulse className="w-4 h-4 text-teal-700" />
                   </div>
-                  {(profile?.conditions?.length || 0) > 0 && (
-                    <button
-                      onClick={() => setActiveTab('conditions')}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 transition-colors"
-                    >
-                      Manage Conditions &rarr;
-                    </button>
-                  )}
+
+                  <div className="my-1">
+                    {profile.conditions && profile.conditions.length > 0 ? (
+                      <p className="text-base font-bold text-slate-900 leading-snug">
+                        {profile.conditions.join(', ')}
+                      </p>
+                    ) : (
+                      <p className="text-sm font-semibold text-slate-400">None selected</p>
+                    )}
+                  </div>
+
+                  <span className="text-[11px] text-teal-700 font-semibold mt-2 inline-flex items-center gap-1">
+                    Manage conditions &rarr;
+                  </span>
                 </div>
 
-                {(!profile?.conditions || profile.conditions.length === 0) ? (
-                  <div className="py-6 px-4 bg-slate-50 border border-slate-200 rounded-lg text-center">
-                    <HeartPulse className="w-7 h-7 text-slate-400 mx-auto mb-2" />
-                    <p className="text-xs font-semibold text-slate-700">No medical conditions added yet.</p>
-                    <p className="text-[11px] text-slate-500 mt-1 mb-3">
-                      Please select your condition(s) to configure clinical vital parameters.
-                    </p>
-                    <button
-                      onClick={() => setActiveTab('conditions')}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold transition-colors"
-                    >
-                      Add Medical Condition
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-2.5">
-                    {profile.conditions.map((cond) => (
-                      <span
-                        key={cond}
-                        className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-teal-50 text-teal-900 border border-teal-200"
-                      >
-                        <span className="w-2 h-2 rounded-full bg-teal-600" />
-                        <span>{cond}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 7. SUMMARY CARDS (Actual Firestore data counts) */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Recent Health Readings */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                {/* 2. Latest Health Reading */}
+                <div
+                  onClick={() => setActiveTab('monitoring')}
+                  className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs hover:border-teal-500 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between"
+                >
                   <div className="flex items-center justify-between text-slate-500 mb-2">
-                    <span className="text-xs font-medium">Recent Health Readings</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Latest Health Reading
+                    </span>
                     <Activity className="w-4 h-4 text-teal-700" />
                   </div>
-                  <span className="text-2xl font-bold text-slate-900 block">{readings.length}</span>
-                  <span className="text-[11px] text-slate-500 mt-1 block">
-                    {readings.length === 0 ? 'No readings yet' : 'Readings recorded'}
+
+                  <div className="my-1">
+                    {latestReadingSummary ? (
+                      <div className="space-y-0.5">
+                        {latestReadingSummary.map((line, idx) => (
+                          <p key={idx} className="text-xs font-bold text-slate-800">
+                            {line}
+                          </p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs font-semibold text-slate-400">No readings yet</p>
+                    )}
+                  </div>
+
+                  <span className="text-[11px] text-teal-700 font-semibold mt-2 inline-flex items-center gap-1">
+                    Enter health reading &rarr;
                   </span>
                 </div>
 
-                {/* Upcoming Appointments */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                {/* 3. Upcoming Appointment */}
+                <div
+                  onClick={() => setActiveTab('appointments')}
+                  className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs hover:border-teal-500 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between"
+                >
                   <div className="flex items-center justify-between text-slate-500 mb-2">
-                    <span className="text-xs font-medium">Upcoming Appointments</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Upcoming Appointment
+                    </span>
                     <Calendar className="w-4 h-4 text-teal-700" />
                   </div>
-                  <span className="text-2xl font-bold text-slate-900 block">{appointments.length}</span>
-                  <span className="text-[11px] text-slate-500 mt-1 block">
-                    {appointments.length === 0 ? 'No appointments' : 'Upcoming visits'}
+
+                  <div className="my-1">
+                    {nextAppointment ? (
+                      <div>
+                        <p className="text-xs font-bold text-slate-900 truncate">
+                          Dr. {nextAppointment.doctorName}
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          {new Date(nextAppointment.dateTime).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs font-semibold text-slate-400">No upcoming appointments</p>
+                    )}
+                  </div>
+
+                  <span className="text-[11px] text-teal-700 font-semibold mt-2 inline-flex items-center gap-1">
+                    Book appointment &rarr;
                   </span>
                 </div>
 
-                {/* Laboratory Reports */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                {/* 4. Laboratory Reports */}
+                <div
+                  onClick={() => setActiveTab('lab_reports')}
+                  className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs hover:border-teal-500 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between"
+                >
                   <div className="flex items-center justify-between text-slate-500 mb-2">
-                    <span className="text-xs font-medium">Laboratory Reports</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Laboratory Reports
+                    </span>
                     <FlaskConical className="w-4 h-4 text-teal-700" />
                   </div>
-                  <span className="text-2xl font-bold text-slate-900 block">{labReports.length}</span>
-                  <span className="text-[11px] text-slate-500 mt-1 block">
-                    {labReports.length === 0 ? 'No reports' : 'Reports available'}
-                  </span>
-                </div>
 
-                {/* Prescriptions */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                  <div className="flex items-center justify-between text-slate-500 mb-2">
-                    <span className="text-xs font-medium">Prescriptions</span>
-                    <Pill className="w-4 h-4 text-teal-700" />
+                  <div className="my-1">
+                    <p className="text-xl font-bold text-slate-900">
+                      {labReports.length} {labReports.length === 1 ? 'report' : 'reports'}
+                    </p>
                   </div>
-                  <span className="text-2xl font-bold text-slate-900 block">{prescriptions.length}</span>
-                  <span className="text-[11px] text-slate-500 mt-1 block">
-                    {prescriptions.length === 0 ? 'No prescriptions' : 'Active prescriptions'}
+
+                  <span className="text-[11px] text-teal-700 font-semibold mt-2 inline-flex items-center gap-1">
+                    View reports &rarr;
                   </span>
                 </div>
               </div>
 
-              {/* 8. QUICK HEALTH ACTIONS (Your Health Overview) */}
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 mb-3">Your Health Overview</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {/* Quick Actions (Simple, minimal, whitespace) */}
+              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-4">
+                  Quick Actions
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button
                     onClick={() => setActiveTab('monitoring')}
-                    className="p-4 bg-white rounded-xl border border-slate-200 hover:border-teal-500 hover:bg-teal-50/20 transition-all text-left shadow-xs group"
+                    className="p-4 rounded-xl border border-slate-200 hover:border-teal-500 hover:bg-teal-50/20 transition-all text-left group flex items-center gap-3"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center mb-2.5 group-hover:bg-teal-700 group-hover:text-white transition-colors">
+                    <div className="w-9 h-9 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center group-hover:bg-teal-700 group-hover:text-white transition-colors shrink-0">
                       <Activity className="w-4 h-4" />
                     </div>
-                    <p className="text-xs font-bold text-slate-900">Add Health Reading</p>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">Enter Health Reading</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Record your latest vitals</p>
+                    </div>
                   </button>
 
                   <button
                     onClick={() => setActiveTab('history')}
-                    className="p-4 bg-white rounded-xl border border-slate-200 hover:border-teal-500 hover:bg-teal-50/20 transition-all text-left shadow-xs group"
+                    className="p-4 rounded-xl border border-slate-200 hover:border-teal-500 hover:bg-teal-50/20 transition-all text-left group flex items-center gap-3"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center mb-2.5 group-hover:bg-teal-700 group-hover:text-white transition-colors">
+                    <div className="w-9 h-9 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center group-hover:bg-teal-700 group-hover:text-white transition-colors shrink-0">
                       <History className="w-4 h-4" />
                     </div>
-                    <p className="text-xs font-bold text-slate-900">View Health History</p>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('trends')}
-                    className="p-4 bg-white rounded-xl border border-slate-200 hover:border-teal-500 hover:bg-teal-50/20 transition-all text-left shadow-xs group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center mb-2.5 group-hover:bg-teal-700 group-hover:text-white transition-colors">
-                      <TrendingUp className="w-4 h-4" />
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">View Health History</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Review previous readings</p>
                     </div>
-                    <p className="text-xs font-bold text-slate-900">View Health Trends</p>
                   </button>
 
                   <button
                     onClick={() => setActiveTab('appointments')}
-                    className="p-4 bg-white rounded-xl border border-slate-200 hover:border-teal-500 hover:bg-teal-50/20 transition-all text-left shadow-xs group"
+                    className="p-4 rounded-xl border border-slate-200 hover:border-teal-500 hover:bg-teal-50/20 transition-all text-left group flex items-center gap-3"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center mb-2.5 group-hover:bg-teal-700 group-hover:text-white transition-colors">
+                    <div className="w-9 h-9 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center group-hover:bg-teal-700 group-hover:text-white transition-colors shrink-0">
                       <Calendar className="w-4 h-4" />
                     </div>
-                    <p className="text-xs font-bold text-slate-900">Book Appointment</p>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">Book Appointment</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Schedule a visit with a doctor</p>
+                    </div>
                   </button>
-                </div>
-              </div>
-
-              {/* 3. RECENT HEALTH READINGS */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">Recent Health Readings</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Actual measurements recorded in Firestore.
-                    </p>
-                  </div>
-                  {readings.length > 0 && (
-                    <button
-                      onClick={() => setActiveTab('monitoring')}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 transition-colors"
-                    >
-                      Add Reading &rarr;
-                    </button>
-                  )}
-                </div>
-
-                {readings.length === 0 ? (
-                  <div className="py-8 text-center bg-slate-50 rounded-lg border border-slate-100">
-                    <Activity className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                    <p className="text-xs font-semibold text-slate-700">No readings recorded yet.</p>
-                    <button
-                      onClick={() => setActiveTab('monitoring')}
-                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors"
-                    >
-                      Add Reading &rarr;
-                    </button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-slate-400 font-medium">
-                          <th className="pb-2.5 font-semibold">Parameter</th>
-                          <th className="pb-2.5 font-semibold">Value</th>
-                          <th className="pb-2.5 font-semibold">Unit</th>
-                          <th className="pb-2.5 font-semibold">Date / Time</th>
-                          <th className="pb-2.5 font-semibold text-right">FHIR</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {readings.slice(0, 5).map((r) => (
-                          <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="py-2.5 font-semibold text-slate-900">
-                              {formatParamName(r.parameterType)}
-                            </td>
-                            <td className="py-2.5 text-slate-800 font-medium">
-                              {r.parameterType === 'blood_pressure'
-                                ? `${r.systolic}/${r.diastolic}`
-                                : r.value}
-                              {r.measurementContext && (
-                                <span className="ml-1.5 text-[10px] text-slate-400">
-                                  ({r.measurementContext})
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2.5 text-slate-500">{r.unit}</td>
-                            <td className="py-2.5 text-slate-500">
-                              {r.date} {r.time || ''}
-                            </td>
-                            <td className="py-2.5 text-right">
-                              <button
-                                onClick={() =>
-                                  setInspectorData({
-                                    title: `FHIR Observation: ${r.parameterType}`,
-                                    resourceName: 'Observation',
-                                    json: buildFHIRObservation(r),
-                                  })
-                                }
-                                className="p-1 rounded text-slate-400 hover:text-teal-700 hover:bg-teal-50 transition-colors"
-                                title="Inspect FHIR Observation JSON"
-                              >
-                                <FileCode className="w-3.5 h-3.5 inline" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {/* 4. HEALTH TRENDS */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 mb-4">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">Health Trends</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Longitudinal vital trends filtered by your diagnosed conditions.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setActiveTab('trends')}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800 transition-colors"
-                  >
-                    View Full Trends &rarr;
-                  </button>
-                </div>
-
-                {readings.length === 0 ? (
-                  <div className="py-8 text-center bg-slate-50 rounded-lg border border-slate-100">
-                    <TrendingUp className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                    <p className="text-xs font-semibold text-slate-700">No health readings recorded yet.</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Record your check-in readings above to generate continuous visual health trends.
-                    </p>
-                  </div>
-                ) : (
-                  <HealthTrendsView
-                    readings={readings}
-                    conditions={profile.conditions}
-                    onNavigateToConditions={() => setActiveTab('conditions')}
-                  />
-                )}
-              </div>
-
-              {/* 5. AI RISK ASSESSMENT */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-                <div className="pb-3 border-b border-slate-100 mb-4">
-                  <h3 className="text-sm font-bold text-slate-900">AI Risk Assessment</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    AI-assisted risk stratification based on available health data.
-                  </p>
-                </div>
-
-                {/* Check if AI is configured */}
-                {!import.meta.env.VITE_AI_SERVICE_URL ? (
-                  <div className="py-6 text-center bg-slate-50 rounded-lg border border-slate-100">
-                    <p className="text-xs font-semibold text-slate-700">AI risk assessment service is not configured.</p>
-                  </div>
-                ) : (!profile?.conditions || profile.conditions.length === 0) ? (
-                  <div className="py-6 text-center bg-slate-50 rounded-lg border border-slate-100">
-                    <p className="text-xs font-semibold text-slate-700">No medical conditions added yet.</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Select your diagnosed condition in Medical Conditions to enable risk stratification.
-                    </p>
-                  </div>
-                ) : riskAssessments.length === 0 ? (
-                  <div className="py-6 text-center bg-slate-50 rounded-lg border border-slate-100">
-                    <p className="text-xs font-semibold text-slate-700">No risk assessment available.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {riskAssessments.map((assessment) => {
-                      const isAssessed = assessment.status === 'ASSESSED';
-                      const level = assessment.riskLevel;
-
-                      return (
-                        <div
-                          key={assessment.id}
-                          className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5"
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <div>
-                              <span className="text-xs font-bold text-slate-900">
-                                Condition: {assessment.condition}
-                              </span>
-                              <span className="text-[10px] text-slate-400 block sm:inline sm:ml-2">
-                                Model: {assessment.modelName}
-                              </span>
-                            </div>
-
-                            {isAssessed && level ? (
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                                  level === 'HIGH'
-                                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                    : level === 'MODERATE'
-                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                    : 'bg-teal-100 text-teal-800 border border-teal-200'
-                                }`}
-                              >
-                                Risk Level: {level}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                                Insufficient data
-                              </span>
-                            )}
-                          </div>
-
-                          <p className="text-xs text-slate-600">
-                            {isAssessed
-                              ? assessment.message
-                              : 'Insufficient data for risk assessment.'}
-                          </p>
-
-                          {!isAssessed && assessment.missingRequiredFields && (
-                            <div className="text-[11px] text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
-                              <span className="font-semibold block mb-0.5">Required data to evaluate:</span>
-                              <ul className="list-disc list-inside space-y-0.5 text-[11px]">
-                                {assessment.missingRequiredFields.map((field, idx) => (
-                                  <li key={idx}>{field}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          <div className="pt-2 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-slate-400 gap-1">
-                            <span>
-                              AI-generated risk assessment for clinical decision support. It is not a diagnosis.
-                            </span>
-                            <span>{new Date(assessment.assessedAt).toLocaleDateString()}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* 6 & 7. TWO-COLUMN: UPCOMING APPOINTMENTS & LATEST LABORATORY REPORT */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* 6. Upcoming Appointments */}
-                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-                    <h3 className="text-sm font-bold text-slate-900">Upcoming Appointments</h3>
-                    <button
-                      onClick={() => setActiveTab('appointments')}
-                      className="text-xs font-semibold text-teal-700 hover:text-teal-800"
-                    >
-                      Book Appointment &rarr;
-                    </button>
-                  </div>
-
-                  {appointments.length === 0 ? (
-                    <div className="py-8 text-center bg-slate-50 rounded-lg border border-slate-100 my-auto">
-                      <Calendar className="w-7 h-7 text-slate-400 mx-auto mb-1.5" />
-                      <p className="text-xs font-semibold text-slate-700">No upcoming appointments.</p>
-                      <button
-                        onClick={() => setActiveTab('appointments')}
-                        className="mt-2.5 inline-flex items-center gap-1 text-xs font-semibold text-teal-800 hover:underline"
-                      >
-                        Book Appointment &rarr;
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2.5">
-                      {appointments.slice(0, 2).map((appt) => (
-                        <div key={appt.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-bold text-slate-900">Dr. {appt.doctorName}</h4>
-                            <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
-                              {appt.status}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-600 mt-1">
-                            {new Date(appt.dateTime).toLocaleString()} • {appt.reason}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 7. Latest Laboratory Report */}
-                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-                    <h3 className="text-sm font-bold text-slate-900">Latest Laboratory Report</h3>
-                    <button
-                      onClick={() => setActiveTab('lab_reports')}
-                      className="text-xs font-semibold text-teal-700 hover:text-teal-800"
-                    >
-                      View All &rarr;
-                    </button>
-                  </div>
-
-                  {labReports.length === 0 ? (
-                    <div className="py-8 text-center bg-slate-50 rounded-lg border border-slate-100 my-auto">
-                      <FlaskConical className="w-7 h-7 text-slate-400 mx-auto mb-1.5" />
-                      <p className="text-xs font-semibold text-slate-700">No laboratory reports available.</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Diagnostic results will appear once uploaded by the lab.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {labReports.slice(0, 1).map((rep) => (
-                        <div key={rep.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-bold text-slate-900">{rep.testName}</h4>
-                            <span className="text-[10px] text-slate-500">{rep.issuedDate}</span>
-                          </div>
-                          <p className="text-xs text-slate-600 mt-1">Status: {rep.status}</p>
-                          {rep.clinicalNotes && (
-                            <p className="text-[11px] text-slate-500 mt-1 italic line-clamp-2">
-                              {rep.clinicalNotes}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -888,7 +591,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
 
           {/* VIEW: PROFILE */}
           {activeTab === 'profile' && (
-            <PatientProfileManager profile={profile} onProfileUpdated={(up) => setProfile(up)} />
+            <PatientProfileManager
+              profile={profile}
+              onProfileUpdated={(up) => setProfile(up)}
+              onNavigateToConditions={() => setActiveTab('conditions')}
+            />
           )}
 
           {/* VIEW: MEDICAL CONDITIONS */}
@@ -900,20 +607,18 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
             />
           )}
 
-          {/* VIEW: HEALTH MONITORING (Condition-Based Vital Entry) */}
+          {/* VIEW: HEALTH MONITORING */}
           {activeTab === 'monitoring' && (
-            <div className="space-y-6">
-              <ConditionMonitoringForm
-                patientId={user.id}
-                conditions={profile.conditions}
-                readings={readings}
-                onReadingAdded={handleReadingAdded}
-                onNavigateToConditions={() => setActiveTab('conditions')}
-              />
-            </div>
+            <ConditionMonitoringForm
+              patientId={user.id}
+              conditions={profile.conditions}
+              readings={readings}
+              onReadingAdded={handleReadingAdded}
+              onNavigateToConditions={() => setActiveTab('conditions')}
+            />
           )}
 
-          {/* VIEW: HEALTH HISTORY (Longitudinal Timeline) */}
+          {/* VIEW: HEALTH HISTORY */}
           {activeTab === 'history' && (
             <LongitudinalHistory
               conditions={profile.conditions}
@@ -934,6 +639,95 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
             />
           )}
 
+          {/* VIEW: HEALTH RISK ASSESSMENT */}
+          {activeTab === 'ai_risk' && (
+            <div className="max-w-3xl space-y-6">
+              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
+                <div className="pb-5 border-b border-slate-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-900">Health Risk Assessment</h2>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Review your health risk based on your available health information.
+                  </p>
+                  <div className="mt-3 p-3 rounded-lg bg-teal-50/70 border border-teal-200 text-xs text-teal-900">
+                    <p className="font-medium">
+                      This information is for support and does not replace advice from your doctor.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-5 space-y-4">
+                  {(!profile.conditions || profile.conditions.length === 0) ? (
+                    <div className="py-10 text-center bg-slate-50 rounded-xl border border-slate-100">
+                      <p className="text-xs font-semibold text-slate-700">No health condition selected yet.</p>
+                      <button
+                        onClick={() => setActiveTab('conditions')}
+                        className="mt-3 px-4 py-2 bg-teal-700 text-white rounded-lg text-xs font-semibold hover:bg-teal-800 transition-colors shadow-xs"
+                      >
+                        Select Health Conditions
+                      </button>
+                    </div>
+                  ) : (
+                    riskAssessments.map((assessment) => {
+                      const isAssessed = assessment.status === 'ASSESSED';
+                      const level = assessment.riskLevel;
+
+                      return (
+                        <div
+                          key={assessment.id}
+                          className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5 shadow-2xs"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <span className="text-sm font-bold text-slate-900">
+                              Condition: {assessment.condition}
+                            </span>
+
+                            {isAssessed && level ? (
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                                  level === 'HIGH'
+                                    ? 'bg-rose-100 text-rose-800'
+                                    : level === 'MODERATE'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-teal-100 text-teal-800'
+                                }`}
+                              >
+                                Risk Level: {level}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600">
+                                Insufficient data
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            {assessment.message}
+                          </p>
+
+                          {!isAssessed && assessment.missingRequiredFields && (
+                            <div className="text-[11px] text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                              <span className="font-semibold block mb-0.5">Required measurements to evaluate:</span>
+                              <ul className="list-disc list-inside space-y-0.5 text-[11px]">
+                                {assessment.missingRequiredFields.map((field, idx) => (
+                                  <li key={idx}>{field}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* VIEW: LAB REPORTS */}
           {activeTab === 'lab_reports' && (
             <PatientPrescriptionsAndLabs
@@ -949,6 +743,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
               patientId={user.id}
               patientName={patientDisplayName}
               onJoinVideo={(appt) => setActiveVideoAppt(appt)}
+              mode="appointments"
             />
           )}
 
@@ -958,6 +753,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
               patientId={user.id}
               patientName={patientDisplayName}
               onJoinVideo={(appt) => setActiveVideoAppt(appt)}
+              mode="consultations"
             />
           )}
 
@@ -988,16 +784,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user, onLogo
           {activeTab === 'help' && <PatientHelpSupportView />}
         </div>
       </main>
-
-      {/* FHIR Inspector Modal */}
-      {inspectorData && (
-        <FHIRInspectorModal
-          title={inspectorData.title}
-          resourceName={inspectorData.resourceName}
-          fhirJson={inspectorData.json}
-          onClose={() => setInspectorData(null)}
-        />
-      )}
 
       {/* Video Consultation Modal */}
       {activeVideoAppt && (

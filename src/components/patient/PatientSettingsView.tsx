@@ -44,14 +44,14 @@ export const PatientSettingsView: React.FC<PatientSettingsViewProps> = ({ user, 
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
         <div className="flex items-center gap-2 pb-4 border-b border-slate-100 mb-5">
           <Bell className="w-4 h-4 text-teal-700" />
-          <h3 className="text-sm font-bold text-slate-900">Notifications & Clinical Reminders</h3>
+          <h3 className="text-sm font-bold text-slate-900">Notifications &amp; Reminders</h3>
         </div>
 
         <form onSubmit={handleSavePreferences} className="space-y-4">
           <div className="flex items-center justify-between py-2 border-b border-slate-50">
             <div>
               <p className="text-xs font-semibold text-slate-900">Appointment Reminders</p>
-              <p className="text-[11px] text-slate-500">Receive email notifications for upcoming teleconsultations</p>
+              <p className="text-[11px] text-slate-500">Receive email reminders for upcoming consultations</p>
             </div>
             <input
               type="checkbox"
@@ -63,8 +63,8 @@ export const PatientSettingsView: React.FC<PatientSettingsViewProps> = ({ user, 
 
           <div className="flex items-center justify-between py-2 border-b border-slate-50">
             <div>
-              <p className="text-xs font-semibold text-slate-900">SMS Clinical Alerts</p>
-              <p className="text-[11px] text-slate-500">Send urgent updates to your registered phone number</p>
+              <p className="text-xs font-semibold text-slate-900">SMS Alerts</p>
+              <p className="text-[11px] text-slate-500">Send important updates to your registered phone number</p>
             </div>
             <input
               type="checkbox"
@@ -76,8 +76,8 @@ export const PatientSettingsView: React.FC<PatientSettingsViewProps> = ({ user, 
 
           <div className="flex items-center justify-between py-2">
             <div>
-              <p className="text-xs font-semibold text-slate-900">Daily Vital Reading Prompt</p>
-              <p className="text-[11px] text-slate-500">Notify me to record vitals according to my diagnosed condition</p>
+              <p className="text-xs font-semibold text-slate-900">Daily Health Reading Reminder</p>
+              <p className="text-[11px] text-slate-500">Remind me to record my daily health readings</p>
             </div>
             <input
               type="checkbox"
@@ -90,7 +90,7 @@ export const PatientSettingsView: React.FC<PatientSettingsViewProps> = ({ user, 
           <div className="pt-3 flex items-center justify-between">
             <button
               type="submit"
-              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold transition-colors"
+              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs"
             >
               Save Notification Preferences
             </button>
@@ -104,22 +104,21 @@ export const PatientSettingsView: React.FC<PatientSettingsViewProps> = ({ user, 
         </form>
       </div>
 
-      {/* Data Export & Interoperability */}
+      {/* Data Export */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
         <div className="flex items-center gap-2 pb-4 border-b border-slate-100 mb-4">
           <Download className="w-4 h-4 text-teal-700" />
-          <h3 className="text-sm font-bold text-slate-900">FHIR R4 Health Record Export</h3>
+          <h3 className="text-sm font-bold text-slate-900">Download Health Records</h3>
         </div>
         <p className="text-xs text-slate-600 mb-4">
-          You can download a machine-readable, interoperable FHIR R4 Patient resource representing your demographic
-          and clinical profile for transfer to any compatible electronic health record (EHR) system.
+          You can download a copy of your personal health profile and health information in standard healthcare format (JSON) to keep for your records or share with your doctor.
         </p>
         <button
           onClick={handleDownloadFHIR}
           className="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold transition-colors"
         >
           <Download className="w-3.5 h-3.5 text-teal-700" />
-          Download FHIR R4 Patient Resource (JSON)
+          Download Health Record (JSON)
         </button>
       </div>
 
@@ -127,15 +126,15 @@ export const PatientSettingsView: React.FC<PatientSettingsViewProps> = ({ user, 
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
         <div className="flex items-center gap-2 pb-4 border-b border-slate-100 mb-4">
           <Shield className="w-4 h-4 text-teal-700" />
-          <h3 className="text-sm font-bold text-slate-900">Account Security & Access</h3>
+          <h3 className="text-sm font-bold text-slate-900">Account Security &amp; Access</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
           <div>
-            <span className="text-slate-400 block mb-0.5">Authenticated Email</span>
+            <span className="text-slate-400 block mb-0.5">Email Address</span>
             <span className="font-semibold text-slate-900">{user.email}</span>
           </div>
           <div>
-            <span className="text-slate-400 block mb-0.5">System Identifier</span>
+            <span className="text-slate-400 block mb-0.5">Account ID</span>
             <span className="font-mono text-slate-700">{user.id}</span>
           </div>
           <div>
@@ -143,8 +142,8 @@ export const PatientSettingsView: React.FC<PatientSettingsViewProps> = ({ user, 
             <span className="font-semibold text-teal-800">Patient</span>
           </div>
           <div>
-            <span className="text-slate-400 block mb-0.5">Security Level</span>
-            <span className="text-slate-700 font-medium">Standard Patient Authentication</span>
+            <span className="text-slate-400 block mb-0.5">Account Status</span>
+            <span className="text-emerald-700 font-medium">Active &amp; Secure</span>
           </div>
         </div>
       </div>

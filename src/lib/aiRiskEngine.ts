@@ -411,10 +411,12 @@ export function runAIRiskAssessment(input: EvaluationInput): AIRiskAssessment {
         condition: input.condition,
         status: 'INSUFFICIENT_DATA',
         inputFeaturesUsed: {},
-        missingRequiredFields: ['Unsupported Condition'],
-        message: 'Insufficient data for risk assessment.',
-        clinicalRecommendations: [],
-        modelName: 'Standard Clinical Model',
+        missingRequiredFields: ['AI risk model not implemented for this condition'],
+        message: `An AI risk stratification model is not currently implemented for ${input.condition}. Routine health monitoring and trend tracking remain fully active.`,
+        clinicalRecommendations: [
+          `Continue recording your vital signs and health readings as recommended by your physician.`,
+        ],
+        modelName: 'Standard Monitoring (No AI Model)',
         modelVersion: 'v1.0',
         assessedAt: new Date().toISOString(),
       };

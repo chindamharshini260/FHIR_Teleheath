@@ -1,5 +1,5 @@
 import React from 'react';
-import { HelpCircle, Phone, AlertTriangle, MessageSquare, FileText, CheckCircle2 } from 'lucide-react';
+import { HelpCircle, Phone, AlertTriangle, MessageSquare, FileText } from 'lucide-react';
 
 export const PatientHelpSupportView: React.FC = () => {
   return (
@@ -7,7 +7,7 @@ export const PatientHelpSupportView: React.FC = () => {
       <div>
         <h2 className="text-lg font-bold text-slate-900">Help & Support</h2>
         <p className="text-xs text-slate-500 mt-0.5">
-          Guidance on using the FHIR Telehealth portal and reaching your care team.
+          Guidance on managing your health readings and reaching your care team.
         </p>
       </div>
 
@@ -17,9 +17,9 @@ export const PatientHelpSupportView: React.FC = () => {
         <div>
           <h3 className="text-xs font-bold text-rose-900 uppercase tracking-wide">Medical Emergency Advisory</h3>
           <p className="text-xs text-rose-800 mt-1 leading-relaxed">
-            This telehealth portal is not designed for urgent or life-threatening emergencies. If you are experiencing
+            This telehealth app is not designed for life-threatening emergencies. If you are experiencing
             severe chest pain, sudden shortness of breath, acute confusion, or other medical emergencies, please call
-            your local emergency services (<strong>911</strong> or local equivalent) or visit the nearest hospital emergency department immediately.
+            your local emergency services (<strong>911</strong> or local emergency number) or visit the nearest emergency department immediately.
           </p>
         </div>
       </div>
@@ -32,7 +32,7 @@ export const PatientHelpSupportView: React.FC = () => {
           </div>
           <h3 className="text-sm font-bold text-slate-900">Clinic Support Line</h3>
           <p className="text-xs text-slate-500 mt-1 mb-3">
-            Available Monday to Friday, 8:00 AM – 6:00 PM for telehealth appointment assistance.
+            Available Monday to Friday, 8:00 AM – 6:00 PM for appointment assistance.
           </p>
           <a
             href="tel:+18005550199"
@@ -46,11 +46,11 @@ export const PatientHelpSupportView: React.FC = () => {
           <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center mb-3">
             <MessageSquare className="w-4 h-4" />
           </div>
-          <h3 className="text-sm font-bold text-slate-900">Clinical Nurse Support</h3>
+          <h3 className="text-sm font-bold text-slate-900">Care Team Support</h3>
           <p className="text-xs text-slate-500 mt-1 mb-3">
-            Questions regarding prescribed medications, vital trends, or appointment preparation.
+            Questions regarding prescribed medicines, health readings, or appointment preparation.
           </p>
-          <span className="text-xs font-semibold text-slate-700">support@telehealth-fhir.org</span>
+          <span className="text-xs font-semibold text-slate-700">support@telehealth-care.org</span>
         </div>
       </div>
 
@@ -63,35 +63,35 @@ export const PatientHelpSupportView: React.FC = () => {
 
         <div className="space-y-4 text-xs">
           <div>
-            <h4 className="font-bold text-slate-800">How does condition-based monitoring work?</h4>
+            <h4 className="font-bold text-slate-800">How does personalized monitoring work?</h4>
             <p className="text-slate-600 mt-1 leading-relaxed">
-              When you select your chronic conditions (such as Diabetes, Hypertension, or COPD) in <em>Medical Conditions</em>,
-              the portal automatically customizes your <em>Health Monitoring</em> view to present only the clinical parameters
-              relevant to your disease management.
+              When you choose your health conditions in <em>My Health Conditions</em>,
+              the portal automatically tailors your <em>Health Monitoring</em> view to display the measurements
+              relevant to you, such as Blood Pressure for Hypertension or Blood Glucose for Diabetes.
             </p>
           </div>
 
           <div className="pt-3 border-t border-slate-100">
-            <h4 className="font-bold text-slate-800">Are my vital measurements compliant with FHIR standards?</h4>
+            <h4 className="font-bold text-slate-800">How is my health data stored and protected?</h4>
             <p className="text-slate-600 mt-1 leading-relaxed">
-              Yes. Every blood pressure, blood glucose, oxygen saturation, and vital measurement you record is structured as an
-              official HL7 FHIR R4 Observation resource using standard LOINC terminology codes.
+              Your health readings, medical history, and appointments are stored securely according to standard healthcare
+              privacy and data security standards. Only authorized doctors and healthcare providers you approve can view your records.
             </p>
           </div>
 
           <div className="pt-3 border-t border-slate-100">
-            <h4 className="font-bold text-slate-800">What does the AI Risk Assessment signify?</h4>
+            <h4 className="font-bold text-slate-800">What does the Health Risk Assessment mean?</h4>
             <p className="text-slate-600 mt-1 leading-relaxed">
-              The AI Risk Assessment applies validated clinical decision guidelines to assist your care team in identifying
-              potential health risks early. It is an adjunct decision-support tool and does not constitute a formal diagnosis.
+              The Health Risk Assessment reviews your entered readings against clinical guidelines to help you and your care team identify
+              trends that may require attention. This information is for support and does not replace medical advice from your doctor.
             </p>
           </div>
 
           <div className="pt-3 border-t border-slate-100">
-            <h4 className="font-bold text-slate-800">How do I join a video teleconsultation?</h4>
+            <h4 className="font-bold text-slate-800">How do I join a doctor consultation?</h4>
             <p className="text-slate-600 mt-1 leading-relaxed">
               Go to <em>Appointments</em> or <em>Consultations</em> in your left sidebar. When your appointment is scheduled or
-              active, click the "Join Teleconsultation" button to connect directly with your healthcare provider.
+              active, click the "Join Consultation" button to connect directly with your doctor.
             </p>
           </div>
         </div>

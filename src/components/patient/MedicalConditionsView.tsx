@@ -1,15 +1,23 @@
 import React, { useState } from 'react';
 import { PatientProfile, SupportedCondition } from '../../types';
 import { api } from '../../lib/api';
-import { buildFHIRCondition } from '../../lib/fhir';
-import { Activity, CheckCircle2, AlertCircle, X, HeartPulse, FileCode, ArrowRight } from 'lucide-react';
-import { FHIRInspectorModal } from '../common/FHIRInspectorModal';
+import { HeartPulse, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
 
 interface MedicalConditionsViewProps {
   profile: PatientProfile;
   onConditionsUpdated: (updatedConditions: SupportedCondition[]) => void;
   onNavigateToMonitoring?: () => void;
 }
+
+const AVAILABLE_CONDITIONS: { name: SupportedCondition; description: string; hasAI: boolean }[] = [
+  { name: 'Diabetes', description: 'Monitors Blood Glucose, HbA1c, and Weight', hasAI: true },
+  { name: 'Hypertension', description: 'Monitors Blood Pressure and Heart Rate', hasAI: true },
+  { name: 'COPD', description: 'Monitors Oxygen (SpO2), Breathing Rate, and Heart Rate', hasAI: true },
+  { name: 'Asthma', description: 'Monitors Oxygen (SpO2) and Breathing Rate', hasAI: false },
+  { name: 'Chronic Kidney Disease', description: 'Monitors Blood Pressure and Weight', hasAI: false },
+  { name: 'Heart Disease', description: 'Monitors Blood Pressure, Heart Rate, and Weight', hasAI: false },
+  { name: 'Obesity', description: 'Monitors Weight', hasAI: false },
+];
 
 export const MedicalConditionsView: React.FC<MedicalConditionsViewProps> = ({
   profile,
@@ -21,27 +29,14 @@ export const MedicalConditionsView: React.FC<MedicalConditionsViewProps> = ({
   );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [inspectorData, setInspectorData] = useState<{
-    title: string;
-    resourceName: string;
-    json: object;
-  } | null>(null);
 
-  const availableConditions: SupportedCondition[] = ['Diabetes', 'Hypertension', 'COPD'];
-
-  const handleSelectCondition = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value as SupportedCondition;
-    if (value && !selectedConditions.includes(value)) {
-      setSelectedConditions([...selectedConditions, value]);
-      setMessage(null);
-    }
-    // reset select dropdown
-    e.target.value = '';
-  };
-
-  const handleRemoveCondition = (conditionToRemove: SupportedCondition) => {
-    setSelectedConditions(selectedConditions.filter((c) => c !== conditionToRemove));
+  const toggleCondition = (condition: SupportedCondition) => {
     setMessage(null);
+    if (selectedConditions.includes(condition)) {
+      setSelectedConditions(selectedConditions.filter((c) => c !== condition));
+    } else {
+      setSelectedConditions([...selectedConditions, condition]);
+    }
   };
 
   const handleSave = async () => {
@@ -52,14 +47,12 @@ export const MedicalConditionsView: React.FC<MedicalConditionsViewProps> = ({
       const res = await api.savePatientConditions(profile.userId, selectedConditions);
       onConditionsUpdated(res.conditions);
       setMessage({
-        text: `Medical condition(s) saved successfully: ${
-          selectedConditions.join(', ') || 'None selected'
-        }. Health monitoring parameters are now configured.`,
+        text: 'Your health conditions have been updated successfully.',
         type: 'success',
       });
     } catch (err: any) {
       setMessage({
-        text: err.message || 'Failed to save medical conditions.',
+        text: err.message || 'Failed to save health conditions.',
         type: 'error',
       });
     } finally {
@@ -69,38 +62,40 @@ export const MedicalConditionsView: React.FC<MedicalConditionsViewProps> = ({
 
   return (
     <div className="max-w-3xl space-y-6">
-      {/* Title & Info */}
+      {/* Header */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
-            <HeartPulse className="w-5 h-5" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
+              <HeartPulse className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">My Health Conditions</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Tell us about the health conditions you have. This helps us show the right health measurements for you.
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">Medical Conditions</h2>
-            <p className="text-sm font-semibold text-slate-700 mt-0.5">
-              What medical condition do you have?
-            </p>
-          </div>
-        </div>
-        <p className="text-xs text-slate-500 mt-1">
-          Tell the system your diagnosed condition(s). The system stores your selection and
-          automatically determines the relevant health parameters for your monitoring forms.
-        </p>
 
-        {/* Feedback messages */}
+          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-teal-50 text-teal-800 border border-teal-200 self-start sm:self-auto">
+            Personalized Monitoring
+          </span>
+        </div>
+
+        {/* Feedback message */}
         {message && (
           <div
-            className={`mt-4 p-3.5 rounded-lg text-xs flex items-start justify-between gap-2 ${
+            className={`mb-5 p-4 rounded-xl text-xs flex items-start justify-between gap-3 ${
               message.type === 'success'
-                ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
-                : 'bg-rose-50 border border-rose-200 text-rose-800'
+                ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
+                : 'bg-rose-50 border border-rose-200 text-rose-900'
             }`}
           >
-            <div className="flex items-start gap-2">
+            <div className="flex items-start gap-2.5">
               {message.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               ) : (
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               )}
               <div>
                 <p className="font-semibold">{message.text}</p>
@@ -108,114 +103,86 @@ export const MedicalConditionsView: React.FC<MedicalConditionsViewProps> = ({
                   <button
                     type="button"
                     onClick={onNavigateToMonitoring}
-                    className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-semibold transition-colors"
+                    className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-semibold transition-colors shadow-xs"
                   >
-                    <span>Proceed to Health Monitoring</span>
+                    <span>Enter Health Readings</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
             </div>
-
-            {selectedConditions.length > 0 && message.type === 'success' && (
-              <button
-                type="button"
-                onClick={() =>
-                  setInspectorData({
-                    title: `FHIR Condition: ${selectedConditions[0]}`,
-                    resourceName: 'Condition',
-                    json: buildFHIRCondition(profile.userId, selectedConditions[0]),
-                  })
-                }
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700 underline hover:text-teal-900 shrink-0"
-              >
-                <FileCode className="w-3.5 h-3.5" />
-                <span>View FHIR Condition</span>
-              </button>
-            )}
           </div>
         )}
 
-        <div className="mt-6 space-y-5">
-          {/* Dropdown to select condition */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-              Medical Condition(s)
-            </label>
-            <div className="relative max-w-md">
-              <select
-                onChange={handleSelectCondition}
-                defaultValue=""
-                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-teal-600 focus:outline-none bg-white font-medium text-slate-800"
-              >
-                <option value="" disabled>
-                  Select condition ▼
-                </option>
-                {availableConditions.map((cond) => {
-                  const isSelected = selectedConditions.includes(cond);
-                  return (
-                    <option key={cond} value={cond} disabled={isSelected}>
-                      {cond} {isSelected ? '(Already added)' : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              You can select one or multiple conditions (Diabetes, Hypertension, COPD).
-            </p>
+        {/* Condition Checkbox Cards */}
+        <div className="space-y-3">
+          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+            Select Your Conditions
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {AVAILABLE_CONDITIONS.map((cond) => {
+              const isSelected = selectedConditions.includes(cond.name);
+              return (
+                <div
+                  key={cond.name}
+                  onClick={() => toggleCondition(cond.name)}
+                  className={`p-4 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between ${
+                    isSelected
+                      ? 'border-teal-600 bg-teal-50/50 ring-1 ring-teal-600'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-sm font-bold text-slate-900">{cond.name}</span>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {}} // Handled by card click
+                      className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500 mt-0.5 cursor-pointer"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1.5">{cond.description}</p>
+                  {cond.hasAI && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-700 mt-2 bg-teal-100/60 px-2 py-0.5 rounded w-fit">
+                      <Sparkles className="w-3 h-3" />
+                      Risk Assessment Supported
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
+        </div>
 
-          {/* Selected Conditions list */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-              Selected Conditions:
-            </label>
+        {/* Selected Summary & Save Button */}
+        <div className="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="text-xs text-slate-500">
             {selectedConditions.length === 0 ? (
-              <p className="text-xs text-slate-500 italic py-2">
-                No conditions selected yet. Choose a condition from the dropdown above.
-              </p>
+              <span>No condition selected yet.</span>
             ) : (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {selectedConditions.map((cond) => (
-                  <span
-                    key={cond}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-teal-50 text-teal-900 border border-teal-200"
-                  >
-                    <HeartPulse className="w-3.5 h-3.5 text-teal-600" />
-                    <span>{cond}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveCondition(cond)}
-                      className="p-0.5 rounded-full hover:bg-teal-200 text-teal-700 transition-colors ml-1"
-                      title={`Remove ${cond}`}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
+              <span>
+                <strong>{selectedConditions.length}</strong> condition
+                {selectedConditions.length === 1 ? '' : 's'} selected
+              </span>
             )}
           </div>
 
-          {/* Save Action */}
-          <div className="pt-4 border-t border-slate-100 flex items-center gap-3">
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="inline-flex items-center justify-center py-2.5 px-6 rounded-lg text-sm font-semibold text-white bg-slate-900 hover:bg-teal-700 transition-colors disabled:opacity-50 shadow-xs"
+              className="w-full sm:w-auto inline-flex items-center justify-center py-2.5 px-6 rounded-lg text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 transition-colors disabled:opacity-50 shadow-xs"
             >
-              {saving ? 'Saving Conditions...' : 'Save Conditions'}
+              {saving ? 'Saving...' : 'Save Conditions'}
             </button>
-
             {onNavigateToMonitoring && selectedConditions.length > 0 && (
               <button
                 type="button"
                 onClick={onNavigateToMonitoring}
-                className="py-2.5 px-4 rounded-lg text-sm font-semibold text-teal-700 hover:bg-teal-50 border border-teal-200 transition-colors inline-flex items-center gap-1.5"
+                className="hidden sm:inline-flex items-center gap-1.5 py-2.5 px-4 rounded-lg text-sm font-semibold text-teal-700 hover:bg-teal-50 border border-teal-200 transition-colors"
               >
-                <span>Go to Health Monitoring</span>
+                <span>Health Monitoring</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
@@ -223,61 +190,19 @@ export const MedicalConditionsView: React.FC<MedicalConditionsViewProps> = ({
         </div>
       </div>
 
-      {/* Clinical Parameter Mapping Reference */}
-      <div className="bg-slate-50 rounded-xl border border-slate-200 p-5">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-          System Parameter Mapping Reference
+      {/* Health measurements for each condition */}
+      <div className="bg-slate-50 rounded-xl border border-slate-200 p-5 text-xs text-slate-600 space-y-2">
+        <h4 className="font-bold text-slate-800 flex items-center gap-1.5 text-xs uppercase tracking-wider">
+          <ShieldCheck className="w-4 h-4 text-teal-600" />
+          Health measurements for each condition
         </h4>
-        <p className="text-xs text-slate-500 mb-3">
-          Upon saving your condition, the Health Monitoring page automatically configures only the
-          following relevant clinical data fields:
+        <p className="leading-relaxed">
+          <strong>Routine Vital Tracking:</strong> You can record routine health measurements (such as Blood Pressure, Heart Rate, Blood Glucose, Oxygen Level, and Weight) for any of your selected conditions.
         </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-          <div className="p-3 bg-white rounded-lg border border-slate-200">
-            <h5 className="font-bold text-teal-900 mb-1 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-teal-600" />
-              DIABETES
-            </h5>
-            <ul className="space-y-0.5 text-slate-600">
-              <li>&rarr; Blood Glucose</li>
-              <li>&rarr; HbA1c</li>
-              <li>&rarr; Weight</li>
-            </ul>
-          </div>
-          <div className="p-3 bg-white rounded-lg border border-slate-200">
-            <h5 className="font-bold text-teal-900 mb-1 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-rose-600" />
-              HYPERTENSION
-            </h5>
-            <ul className="space-y-0.5 text-slate-600">
-              <li>&rarr; Blood Pressure (Systolic &amp; Diastolic)</li>
-              <li>&rarr; Heart Rate</li>
-            </ul>
-          </div>
-          <div className="p-3 bg-white rounded-lg border border-slate-200">
-            <h5 className="font-bold text-teal-900 mb-1 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-teal-600" />
-              COPD
-            </h5>
-            <ul className="space-y-0.5 text-slate-600">
-              <li>&rarr; SpO2</li>
-              <li>&rarr; Respiratory Rate</li>
-              <li>&rarr; Heart Rate</li>
-            </ul>
-          </div>
-        </div>
+        <p className="leading-relaxed">
+          <strong>Health Risk Assessment:</strong> Automated risk evaluations are currently active for Diabetes, Hypertension, and COPD to assist in your health monitoring.
+        </p>
       </div>
-
-      {/* FHIR Inspector Modal */}
-      {inspectorData && (
-        <FHIRInspectorModal
-          title={inspectorData.title}
-          resourceName={inspectorData.resourceName}
-          fhirJson={inspectorData.json}
-          onClose={() => setInspectorData(null)}
-        />
-      )}
     </div>
   );
 };

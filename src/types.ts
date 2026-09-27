@@ -41,7 +41,14 @@ export interface UserAccount {
   department?: string; // Applicable to lab staff
 }
 
-export type SupportedCondition = 'Diabetes' | 'Hypertension' | 'COPD';
+export type SupportedCondition =
+  | 'Diabetes'
+  | 'Hypertension'
+  | 'COPD'
+  | 'Asthma'
+  | 'Chronic Kidney Disease'
+  | 'Heart Disease'
+  | 'Obesity';
 
 export interface PatientProfile {
   id: string; // matches user id

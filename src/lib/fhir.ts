@@ -45,6 +45,10 @@ export const SNOMED_CONDITIONS: Record<SupportedCondition, { code: string; displ
   Diabetes: { code: '73211009', display: 'Diabetes mellitus (disorder)' },
   Hypertension: { code: '38341003', display: 'Hypertensive disorder, systemic arterial (disorder)' },
   COPD: { code: '13645005', display: 'Chronic obstructive lung disease (disorder)' },
+  Asthma: { code: '195967001', display: 'Asthma (disorder)' },
+  'Chronic Kidney Disease': { code: '709044004', display: 'Chronic kidney disease (disorder)' },
+  'Heart Disease': { code: '56265001', display: 'Heart disease (disorder)' },
+  Obesity: { code: '414915002', display: 'Obesity (disorder)' },
 };
 
 export function buildFHIRPatient(profile: PatientProfile): FHIRPatientResource {
